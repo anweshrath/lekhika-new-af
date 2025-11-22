@@ -244,7 +244,8 @@ async function executeSingleAIGeneration({
       if (currentChapterData) {
         structuralNodeContext = `
 📐 STRUCTURAL NODE DIRECTIVE (MANDATORY):
-- CHAPTER TITLE: "${currentChapterData.title}" (YOU MUST USE THIS EXACT TITLE)
+- CHAPTER TITLE: "${currentChapterData.title}" (YOU MUST START THE CHAPTER WITH "Chapter ${currentChapterNum}: ${currentChapterData.title}" EXACTLY)
+-- DO NOT include book title, author name, or Table of Contents in the chapter
 - CHAPTER OUTLINE: ${Array.isArray(currentChapterData.outline) ? currentChapterData.outline.join(', ') : 'Follow the story structure'}
 - DO NOT suggest or hint at a "next chapter" - this is the final chapter or part of a complete book
 - END THE CHAPTER NATURALLY without transition suggestions`
