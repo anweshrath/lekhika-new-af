@@ -157,6 +157,16 @@ function compileWorkflowContent(nodeOutputs, userInput) {
         const maybeJson = unfenced.startsWith('{') ? unfenced : (structuralContent.trim().startsWith('{') ? structuralContent.trim() : '')
         if (maybeJson) {
           const parsed = JSON.parse(maybeJson)
+          // SURGICAL FIX: Extract chapter titles from chapter_breakdown
+          const chapterBreakdown = parsed?.story_structure?.chapter_breakdown || parsed?.chapter_breakdown
+          if (Array.isArray(chapterBreakdown) && chapterBreakdown.length > 0) {
+            chapterBreakdown.forEach(ch => {
+              if (ch.chapter && ch.title) {
+                content.structural.chapterTitles[ch.chapter] = ch.title
+              }
+            })
+            console.log(`📐 EXTRACTED chapter titles in compiler:`, content.structural.chapterTitles)
+          }
           const opening = parsed?.opening_content || parsed?.story_architecture?.opening_content
           if (opening) {
             if (opening.foreword?.content) {
@@ -302,17 +312,40 @@ function compileWorkflowContent(nodeOutputs, userInput) {
             content.metadata.characterCountByNode[`${nodeId}_chapter_${chNum}`] = charCount
             content.metadata.nodeCount++
 
-            // SURGICAL FIX: Extract title from content if not provided
+            // SURGICAL FIX: Extract title from structural node data FIRST, then content, then fallback
             let chapterTitle = chapter.title
             if (!chapterTitle || !chapterTitle.trim()) {
-              const chapterStructure = extractChapterStructure(chapter.content)
-              if (chapterStructure && chapterStructure.title && chapterStructure.title.trim()) {
-                chapterTitle = chapterStructure.title.trim()
-                console.log(`📖 Extracted chapter title from content: "${chapterTitle}"`)
+              // Try structural node titles first
+              if (content.structural.chapterTitles && content.structural.chapterTitles[chNum]) {
+                chapterTitle = content.structural.chapterTitles[chNum]
+                console.log(`📐 Using chapter title from structural node: "${chapterTitle}"`)
               } else {
-                // If still no title, skip placeholder - use chapter number only
+                // Try extracting from content
+                const chapterStructure = extractChapterStructure(chapter.content)
+                if (chapterStructure && chapterStructure.title && chapterStructure.title.trim()) {
+                  chapterTitle = chapterStructure.title.trim()
+                  // Remove "Content Writer" placeholder if found
+                  if (chapterTitle.toLowerCase().includes('content writer')) {
+                    chapterTitle = null
+                  } else {
+                    console.log(`📖 Extracted chapter title from content: "${chapterTitle}"`)
+                  }
+                }
+                
+                // Final fallback - use chapter number only, NO placeholders
+                if (!chapterTitle || !chapterTitle.trim() || chapterTitle.toLowerCase().includes('content writer')) {
+                  chapterTitle = `Chapter ${chNum}`
+                  console.warn(`⚠️ Chapter ${chNum} has no valid title - using fallback`)
+                }
+              }
+            } else if (chapterTitle.toLowerCase().includes('content writer')) {
+              // Replace "Content Writer" placeholder with structural title or fallback
+              if (content.structural.chapterTitles && content.structural.chapterTitles[chNum]) {
+                chapterTitle = content.structural.chapterTitles[chNum]
+                console.log(`📐 Replaced "Content Writer" with structural title: "${chapterTitle}"`)
+              } else {
                 chapterTitle = `Chapter ${chNum}`
-                console.warn(`⚠️ Chapter ${chNum} has no title - using fallback`)
+                console.warn(`⚠️ Replaced "Content Writer" placeholder for chapter ${chNum}`)
               }
             }
 

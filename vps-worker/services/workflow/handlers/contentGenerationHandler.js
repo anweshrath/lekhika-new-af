@@ -286,10 +286,11 @@ CRITICAL ORCHESTRATION REQUIREMENTS:
 - START DIRECTLY WITH THE CHAPTER TITLE AND CONTENT
 
 CHAPTER STRUCTURE REQUIREMENTS:
-- START WITH CHAPTER TITLE: "Chapter ${allData.currentChapter || 1}: ${chapterTitleToUse}"
+${chapterTitleToUse ? `- START WITH CHAPTER TITLE: "Chapter ${allData.currentChapter || 1}: ${chapterTitleToUse}" (MANDATORY - USE EXACTLY AS SHOWN)` : `- START WITH A DESCRIPTIVE CHAPTER TITLE: "Chapter ${allData.currentChapter || 1}: [Create a meaningful title based on content]"`}
+- DO NOT include book title, author name, or Table of Contents in the chapter content
+- DO NOT include markdown links like [Chapter Title](#chapter-X) - only plain text
 - INCLUDE PROPER INTRODUCTION TO THE CHAPTER
 - DEVELOP MAIN CONTENT WITH CLEAR SECTIONS
-- INCLUDE PRACTICAL EXAMPLES AND APPLICATIONS
 - END WITH CHAPTER SUMMARY${currentChapterNum < chapterCount ? ' AND TRANSITION TO NEXT CHAPTER' : ' - THIS IS THE FINAL CHAPTER, END NATURALLY WITHOUT SUGGESTING MORE CHAPTERS'}
 
 WORD COUNT ENFORCEMENT:
