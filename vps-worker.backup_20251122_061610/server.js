@@ -393,7 +393,7 @@ app.post('/start-worker', async (req, res) => {
     const PM2_PATH = '/home/lekhika.online/.nvm/versions/node/v18.20.8/bin/pm2';
     const WORKER_DIR = '/home/lekhika.online/vps-worker';
     
-    exec(`${PM2_PATH} start lekhika-worker`, { cwd: WORKER_DIR }, (error, stdout, stderr) => {
+    exec(`${PM2_PATH} start ecosystem.config.js`, { cwd: WORKER_DIR }, (error, stdout, stderr) => {
       if (error) {
         logger.error('Failed to start worker:', error);
         logger.error('Stderr:', stderr);

@@ -277,13 +277,95 @@ function getTokenLedger(stateManager, workflowId, nodeOutputs) {
   return []
 }
 
+/**
+ * Record token usage for a node and update execution state
+ * Extracted from: workflowExecutionService.js - recordNodeTokenUsage()
+ * 
+ * @param {Object} stateManager - State manager instance
+ * @param {string} workflowId - Workflow execution ID
+ * @param {Object} nodeMeta - Node metadata { nodeId, nodeName, nodeType }
+ * @param {Object} nodeOutput - Node output object (mutated in place)
+ */
+function recordNodeTokenUsage(stateManager, workflowId, nodeMeta, nodeOutput) {
+  if (!workflowId || !nodeOutput) {
+    return
+  }
+
+  const metrics = deriveNodeTokenMetrics(nodeOutput)
+  if (!metrics.hasData) {
+    return
+  }
+
+  // SURGICAL FIX: Ensure nodeOutput has token data directly for executionService.js to read
+  // This ensures nodeOutputs[nodeId].aiMetadata.tokens exists when executionService calculates totals
+  if (!nodeOutput.aiMetadata) {
+    nodeOutput.aiMetadata = {}
+  }
+  if (metrics.tokens > 0 && (!nodeOutput.aiMetadata.tokens || nodeOutput.aiMetadata.tokens === 0)) {
+    nodeOutput.aiMetadata.tokens = metrics.tokens
+  }
+  if (metrics.cost > 0 && (!nodeOutput.aiMetadata.cost || nodeOutput.aiMetadata.cost === 0)) {
+    nodeOutput.aiMetadata.cost = metrics.cost
+  }
+  if (metrics.words > 0 && (!nodeOutput.aiMetadata.words || nodeOutput.aiMetadata.words === 0)) {
+    nodeOutput.aiMetadata.words = metrics.words
+  }
+  // Also set at root level for compatibility
+  if (metrics.tokens > 0 && (!nodeOutput.tokens || nodeOutput.tokens === 0)) {
+    nodeOutput.tokens = metrics.tokens
+  }
+  if (!nodeOutput.aiMetadata.provider && metrics.provider) {
+    nodeOutput.aiMetadata.provider = metrics.provider
+  }
+  if (!nodeOutput.aiMetadata.model && metrics.model) {
+    nodeOutput.aiMetadata.model = metrics.model
+  }
+
+  const state = stateManager.getExecutionState(workflowId) || {}
+  const currentUsage = state.tokenUsage || { totalTokens: 0, totalCost: 0, totalWords: 0 }
+  const updatedUsage = {
+    totalTokens: currentUsage.totalTokens + metrics.tokens,
+    totalCost: currentUsage.totalCost + metrics.cost,
+    totalWords: currentUsage.totalWords + metrics.words
+  }
+
+  const ledgerEntry = {
+    nodeId: nodeMeta.nodeId,
+    nodeName: nodeMeta.nodeName,
+    nodeType: nodeMeta.nodeType,
+    tokens: metrics.tokens,
+    cost: metrics.cost,
+    words: metrics.words,
+    provider: metrics.provider || null,
+    model: metrics.model || null,
+    timestamp: new Date().toISOString()
+  }
+
+  const currentLedger = state.tokenLedger || []
+  const updatedLedger = [...currentLedger, ledgerEntry]
+
+  stateManager.updateExecutionState(workflowId, {
+    tokenUsage: updatedUsage,
+    tokenLedger: updatedLedger
+  })
+
+  console.log(`💰 Token usage recorded for ${nodeMeta.nodeName || nodeMeta.nodeId}:`, {
+    tokens: metrics.tokens,
+    cost: metrics.cost,
+    words: metrics.words,
+    totalTokens: updatedUsage.totalTokens,
+    totalCost: updatedUsage.totalCost
+  })
+}
+
 module.exports = {
   deriveNodeTokenMetrics,
   calculateTokenUsageFromOutputs,
   buildTokenLedgerFromOutputs,
   extractNumericValue,
   getTokenUsageSummary,
-  getTokenLedger
+  getTokenLedger,
+  recordNodeTokenUsage
 }
 
 

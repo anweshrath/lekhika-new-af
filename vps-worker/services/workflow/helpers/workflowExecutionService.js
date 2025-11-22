@@ -337,10 +337,10 @@ class WorkflowExecutionService {
       
       for (let i = 0; i < executionOrder.length; i++) {
         // Check if workflow was paused - wait until resumed
-        if (stateManager.isWorkflowPaused(workflowId)) {
+        if (this.isWorkflowPaused(workflowId)) {
           console.log(`⏸️ Workflow ${workflowId} is paused, waiting for resume...`)
           // Wait indefinitely until resumed - use Promise that resolves only on resume
-          await stateManager.waitForResume(workflowId)
+          await this.waitForResume(workflowId)
         }
 
         // Check if workflow was resumed from a specific checkpoint
@@ -516,7 +516,7 @@ class WorkflowExecutionService {
             currentNodeIndex: i,
             completedNodes: executionOrder.slice(0, i + 1).map(n => n.id)
           }
-          stateManager.updateExecutionState(workflowId, updatedState)
+          this.updateExecutionState(workflowId, updatedState)
 
           // CREATE CHECKPOINT AFTER NODE COMPLETION
           stateManager.createCheckpoint(workflowId, node.id, {
@@ -648,7 +648,7 @@ class WorkflowExecutionService {
           console.log(`⏸️ Workflow ${workflowId} paused due to node failure: ${node.data.label}`)
           
           // Wait for user to fix the issue and resume
-          await stateManager.waitForResume(workflowId)
+          await this.waitForResume(workflowId)
           
           // After resume, retry the failed node or continue
           console.log(`▶️ Workflow ${workflowId} resumed after node failure fix`)
@@ -870,7 +870,7 @@ class WorkflowExecutionService {
       }
       
       // Update execution state
-      stateManager.updateExecutionState(executionId, {
+      this.updateExecutionState(executionId, {
         status: 'running',
         nodeOutputs: pipelineData.nodeOutputs,
         resumed: true,
@@ -1287,8 +1287,8 @@ class WorkflowExecutionService {
       pipelineData,
       progressCallback,
       workflowId,
-      parseModelConfig: parseModelConfigHelper,
-      getAIService: () => this.aiService
+      parseModelConfig: this.parseModelConfig.bind(this),
+      getAIService: this.getAIService.bind(this)
     })
   }
 
@@ -1499,31 +1499,6 @@ class WorkflowExecutionService {
     const metrics = deriveNodeTokenMetricsHelper(nodeOutput)
     if (!metrics.hasData) {
       return
-    }
-
-    // SURGICAL FIX: Ensure nodeOutput has token data directly for executionService.js to read
-    // This ensures nodeOutputs[nodeId].aiMetadata.tokens exists when executionService calculates totals
-    if (!nodeOutput.aiMetadata) {
-      nodeOutput.aiMetadata = {}
-    }
-    if (metrics.tokens > 0 && (!nodeOutput.aiMetadata.tokens || nodeOutput.aiMetadata.tokens === 0)) {
-      nodeOutput.aiMetadata.tokens = metrics.tokens
-    }
-    if (metrics.cost > 0 && (!nodeOutput.aiMetadata.cost || nodeOutput.aiMetadata.cost === 0)) {
-      nodeOutput.aiMetadata.cost = metrics.cost
-    }
-    if (metrics.words > 0 && (!nodeOutput.aiMetadata.words || nodeOutput.aiMetadata.words === 0)) {
-      nodeOutput.aiMetadata.words = metrics.words
-    }
-    // Also set at root level for compatibility
-    if (metrics.tokens > 0 && (!nodeOutput.tokens || nodeOutput.tokens === 0)) {
-      nodeOutput.tokens = metrics.tokens
-    }
-    if (!nodeOutput.aiMetadata.provider && metrics.provider) {
-      nodeOutput.aiMetadata.provider = metrics.provider
-    }
-    if (!nodeOutput.aiMetadata.model && metrics.model) {
-      nodeOutput.aiMetadata.model = metrics.model
     }
 
     const state = stateManager.getExecutionState(workflowId) || {}

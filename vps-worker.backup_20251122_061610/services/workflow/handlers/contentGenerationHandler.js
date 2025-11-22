@@ -49,6 +49,42 @@ async function executeSingleAIGeneration({
 
   const { userInput, nodeOutputs, lastNodeOutput } = pipelineData
 
+  // SURGICAL FIX: Extract Story Architect's chapter titles from structural node outputs
+  // This ensures Content Writer gets chapter titles even if intermediate nodes exist
+  let storyArchitectData = null
+  let chapterTitles = {}
+  
+  if (pipelineData.structuralNodeOutputs && Object.keys(pipelineData.structuralNodeOutputs).length > 0) {
+    console.log(`📐 FOUND ${Object.keys(pipelineData.structuralNodeOutputs).length} structural node outputs`)
+    
+    // Find Story Architect output (first structural node with chapter breakdown)
+    for (const [nodeId, structuralOutput] of Object.entries(pipelineData.structuralNodeOutputs)) {
+      if (structuralOutput.content && typeof structuralOutput.content === 'string') {
+        try {
+          const unfenced = structuralOutput.content.replace(/^```json\s*/i, '').replace(/```$/i, '').trim()
+          const maybeJson = unfenced.startsWith('{') ? unfenced : (structuralOutput.content.trim().startsWith('{') ? structuralOutput.content.trim() : '')
+          if (maybeJson) {
+            const parsed = JSON.parse(maybeJson)
+            const chapterBreakdown = parsed?.story_structure?.chapter_breakdown || parsed?.chapter_breakdown
+            
+            if (Array.isArray(chapterBreakdown) && chapterBreakdown.length > 0) {
+              storyArchitectData = parsed
+              chapterBreakdown.forEach(ch => {
+                if (ch.chapter && ch.title) {
+                  chapterTitles[ch.chapter] = ch.title
+                }
+              })
+              console.log(`📐 EXTRACTED chapter titles from Story Architect:`, chapterTitles)
+              break
+            }
+          }
+        } catch (e) {
+          console.warn(`⚠️ Failed to parse structural node ${nodeId} output:`, e.message)
+        }
+      }
+    }
+  }
+
   let structuredData = userInput
   if (lastNodeOutput?.content?.user_input) {
     structuredData = lastNodeOutput.content.user_input
@@ -197,6 +233,34 @@ async function executeSingleAIGeneration({
       }
     })
 
+    // SURGICAL FIX: Get chapter title from Story Architect if available
+    const currentChapterNum = allData.currentChapter || 1
+    const storyArchitectChapterTitle = chapterTitles[currentChapterNum]
+    const chapterTitleToUse = storyArchitectChapterTitle || `[Descriptive Title]`
+    
+    let storyArchitectContext = ''
+    if (storyArchitectData) {
+      const currentChapterData = storyArchitectData.story_structure?.chapter_breakdown?.find(ch => ch.chapter === currentChapterNum)
+      if (currentChapterData) {
+        storyArchitectContext = `
+📐 STORY ARCHITECT DIRECTIVE (MANDATORY):
+- CHAPTER TITLE: "${currentChapterData.title}" (YOU MUST USE THIS EXACT TITLE)
+- CHAPTER OUTLINE: ${Array.isArray(currentChapterData.outline) ? currentChapterData.outline.join(', ') : 'Follow the story structure'}
+- DO NOT suggest or hint at a "next chapter" - this is the final chapter or part of a complete book
+- END THE CHAPTER NATURALLY without transition suggestions`
+        
+        if (storyArchitectData.story_structure?.plot_structure?.pacing_and_tension_arcs) {
+          const pacingData = storyArchitectData.story_structure.plot_structure.pacing_and_tension_arcs.find(arc => arc.chapter === currentChapterNum)
+          if (pacingData) {
+            storyArchitectContext += `\n- PACING: ${pacingData.pacing}, TENSION: ${pacingData.tension_level}`
+            if (Array.isArray(pacingData.key_events) && pacingData.key_events.length > 0) {
+              storyArchitectContext += `\n- KEY EVENTS TO COVER: ${pacingData.key_events.join(', ')}`
+            }
+          }
+        }
+      }
+    }
+
     const wordCountEnforcement = `
 
 CRITICAL BOOK STRUCTURE REQUIREMENTS:
@@ -207,6 +271,7 @@ CRITICAL BOOK STRUCTURE REQUIREMENTS:
 
 DYNAMIC USER INPUTS (ALL PROVIDED INFORMATION):
 ${dynamicInputs.length > 0 ? dynamicInputs.join('\n') : '- No specific inputs provided'}
+${storyArchitectContext}
 
 CRITICAL ORCHESTRATION REQUIREMENTS:
 - YOU MUST GENERATE A COMPLETE, PROFESSIONAL BOOK CHAPTER
@@ -214,12 +279,18 @@ CRITICAL ORCHESTRATION REQUIREMENTS:
 - USE ALL PROVIDED INPUTS ABOVE TO CREATE RELEVANT CONTENT
 - INCORPORATE ALL USER-SPECIFIED DETAILS INTO THE NARRATIVE
 
+🚫 ABSOLUTE PROHIBITIONS:
+- DO NOT generate book title, author name, or Table of Contents (Story Architect handles this)
+- DO NOT include book metadata or header information
+- DO NOT create a TOC or book structure - ONLY write the chapter content
+- START DIRECTLY WITH THE CHAPTER TITLE AND CONTENT
+
 CHAPTER STRUCTURE REQUIREMENTS:
-- START WITH CHAPTER TITLE: "Chapter ${allData.currentChapter || 1}: [Descriptive Title]"
+- START WITH CHAPTER TITLE: "Chapter ${allData.currentChapter || 1}: ${chapterTitleToUse}"
 - INCLUDE PROPER INTRODUCTION TO THE CHAPTER
 - DEVELOP MAIN CONTENT WITH CLEAR SECTIONS
 - INCLUDE PRACTICAL EXAMPLES AND APPLICATIONS
-- END WITH CHAPTER SUMMARY AND TRANSITION TO NEXT CHAPTER
+- END WITH CHAPTER SUMMARY${currentChapterNum < chapterCount ? ' AND TRANSITION TO NEXT CHAPTER' : ' - THIS IS THE FINAL CHAPTER, END NATURALLY WITHOUT SUGGESTING MORE CHAPTERS'}
 
 WORD COUNT ENFORCEMENT:
 - YOU MUST GENERATE EXACTLY ${wordsPerChapter} WORDS FOR THIS CHAPTER

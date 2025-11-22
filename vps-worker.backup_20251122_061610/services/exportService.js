@@ -353,20 +353,20 @@ class ExportService {
         })
       }
       
-      // Optionally include About Author in TOC if content is present and position is 'end' (to mirror final placement)
-      if (aboutAuthor && aboutAuthor.trim() && aboutAuthorPosition === 'end') {
-        documentChildren.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: 'About the Author',
-                size: 24,
-                font: docxFont
-              })
-            ],
-            spacing: { after: 100 }
-          })
-        )
+        // Optionally include About Author in TOC if content is present and position is 'end' (to mirror final placement)
+        if (aboutAuthor && aboutAuthor.trim() && aboutAuthorPosition === 'end') {
+          documentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'About the Author',
+                  size: 24,
+                  font: docxFont
+                })
+              ],
+              spacing: { after: 100 }
+            })
+          )
       }
       
       // ============================================================
@@ -987,15 +987,15 @@ class ExportService {
         })
       } else {
         // Fallback: Build TOC from structural sections and chapters
-        if (foreword) contents.push({ title: 'Foreword' })
-        if (introduction) contents.push({ title: 'Introduction' })
+      if (foreword) contents.push({ title: 'Foreword' })
+      if (introduction) contents.push({ title: 'Introduction' })
         sections.forEach((section) => {
           // SURGICAL FIX: Use actual section.title - no placeholders
           // If title is missing, section is invalid and should be filtered out earlier
           if (section.title && section.title.trim()) {
             contents.push({ title: section.title.trim() })
           }
-        })
+      })
       }
 
       contents.forEach((entry, idx) => {
@@ -1553,11 +1553,11 @@ class ExportService {
         .filter(section => section.title && section.title.trim()) // Filter out sections without titles
         .map((section, index) => {
           const chapterTitle = section.title.trim()
-          const chapterContent = section.content || ''
-          
-          if (!chapterContent.trim()) {
+        const chapterContent = section.content || ''
+        
+        if (!chapterContent.trim()) {
             console.warn(`⚠️ Warning: Chapter "${chapterTitle}" has empty content`)
-          }
+        }
         
         // Format content as proper HTML paragraphs
         const formattedContent = chapterContent

@@ -329,12 +329,31 @@ function compileWorkflowContent(nodeOutputs, userInput) {
       }
 
       if (typeof output.content === 'string' && output.content.trim().length > 0) {
-        const chapterParts = output.content
+        // SURGICAL FIX: Strip book metadata (title, author, TOC) from Content Writer output
+        // Content Writer should NOT generate book metadata - Story Architect handles that
+        let cleanedContent = output.content
+        
+        // Remove book title/author header patterns
+        cleanedContent = cleanedContent
+          .replace(/^#\s+[^\n]+\n+\*\*by\s+[^\n]+\*\*/mi, '') // # Title\n\n**by Author**
+          .replace(/^#\s+[^\n]+\n+by\s+[^\n]+/mi, '') // # Title\nby Author
+          .replace(/^##\s+Table\s+of\s+Contents?[\s\S]*?(?=##\s+Chapter|#\s+Chapter|Chapter\s+\d+:|$)/mi, '') // TOC section
+          .replace(/^---\s*$/gm, '') // Markdown separators
+          .replace(/^\[Chapter\s+\d+:[^\]]+\]\([^\)]+\)/gmi, '') // TOC links
+          .trim()
+        
+        // Only process if there's actual chapter content left
+        if (!cleanedContent || cleanedContent.length < 50) {
+          console.warn(`⚠️ Content Writer ${nodeId} output contains only metadata - skipping`)
+          return
+        }
+        
+        const chapterParts = cleanedContent
           .split(/(?:^|\n)(?:##\s+Chapter\s+\d+|#\s+Chapter\s+\d+|\*\*Chapter\s+\d+.*\*\*|Chapter\s+\d+\s*:)/g)
           .filter(Boolean)
 
         if (chapterParts.length > 1) {
-          console.log(`📚 Node ${nodeId} content split into ${chapterParts.length} potential chapters`)
+          console.log(`📚 Node ${nodeId} content split into ${chapterParts.length} potential chapters (after metadata removal)`)
           chapterParts.forEach((chapterPart, partIndex) => {
             const chapterStructure = extractChapterStructure(chapterPart.trim())
             if (chapterStructure && chapterStructure.hasStructure) {
@@ -384,7 +403,15 @@ function compileWorkflowContent(nodeOutputs, userInput) {
             }
           })
         } else {
-          const chapterStructure = extractChapterStructure(output.content)
+          // SURGICAL FIX: Strip book metadata before processing single chapter
+          let cleanedContent = output.content
+            .replace(/^#\s+[^\n]+\n+\*\*by\s+[^\n]+\*\*/mi, '')
+            .replace(/^#\s+[^\n]+\n+by\s+[^\n]+/mi, '')
+            .replace(/^##\s+Table\s+of\s+Contents?[\s\S]*?(?=##\s+Chapter|#\s+Chapter|Chapter\s+\d+:|$)/mi, '')
+            .replace(/^---\s*$/gm, '')
+            .trim()
+          
+          const chapterStructure = extractChapterStructure(cleanedContent)
           if (chapterStructure && chapterStructure.hasStructure) {
             const wordCount = chapterStructure.cleanContent.split(/\s+/).filter(word => word.length > 0).length
             const charCount = chapterStructure.cleanContent.length
