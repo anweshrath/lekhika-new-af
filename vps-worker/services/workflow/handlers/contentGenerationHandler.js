@@ -235,7 +235,7 @@ async function executeSingleAIGeneration({
     // SURGICAL FIX: Get chapter title from structural node if available (generic, no hardcoding)
     const currentChapterNum = allData.currentChapter || 1
     const structuralNodeChapterTitle = chapterTitles[currentChapterNum]
-    const chapterTitleToUse = structuralNodeChapterTitle || `[Descriptive Title]`
+    const chapterTitleToUse = structuralNodeChapterTitle || null
     
     let structuralNodeContext = ''
     if (structuralNodeData) {

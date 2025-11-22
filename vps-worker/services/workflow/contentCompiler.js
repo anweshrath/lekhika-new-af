@@ -129,7 +129,8 @@ function compileWorkflowContent(nodeOutputs, userInput) {
     structural: {
       foreword: null,
       introduction: null,
-      tableOfContents: null
+      tableOfContents: null,
+      chapterTitles: {} // SURGICAL FIX: Store chapter titles from structural nodes
     },
     assets: {
       images: [],
