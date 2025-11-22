@@ -49,7 +49,7 @@ const Layout = () => {
           Tokens Used
         </span>
         <span className={compact ? 'text-sm font-bold' : 'text-base font-bold'}>
-          {formatNumber(tokenStats.used)}
+          {formatNumber(tokenStats.used || 0)}
           <span className={`ml-1 font-medium ${compact ? 'text-[11px]' : 'text-sm'}`} style={{ color: 'var(--color-text-muted)' }}>
             / {formatNumber(tokenStats.total || tokenStats.rawTotal || 0)}
           </span>

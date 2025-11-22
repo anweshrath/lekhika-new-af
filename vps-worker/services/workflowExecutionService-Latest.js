@@ -58,12 +58,6 @@ const {
   executeOutputNode: executeOutputNodeHandler
 } = require('./workflow/handlers/outputHandler')
 const {
-  routeProcessNode: routeProcessNodeHelper
-} = require('./workflow/handlers/processNodeRouter')
-const {
-  executeInputNode: executeInputNodeHelper
-} = require('./workflow/handlers/inputNodeHandler')
-const {
   formatFinalOutput: formatFinalOutputHelper,
   generateDeliverables: generateDeliverablesHelper,
   getMimeType: getMimeTypeHelper
@@ -74,8 +68,7 @@ const {
   buildTokenLedgerFromOutputs: buildTokenLedgerFromOutputsHelper,
   extractNumericValue: extractNumericValueHelper,
   getTokenUsageSummary: getTokenUsageSummaryHelper,
-  getTokenLedger: getTokenLedgerHelper,
-  recordNodeTokenUsage: recordNodeTokenUsageHelper
+  getTokenLedger: getTokenLedgerHelper
 } = require('./workflow/helpers/tokenHelpers')
 const {
   restartFromCheckpoint: restartFromCheckpointHelper,
@@ -106,18 +99,6 @@ const {
   uploadFileToSupabase: uploadFileToSupabaseHelper
 } = require('./workflow/utils/inputProcessor')
 const {
-  buildDependencyMaps: buildDependencyMapsHelper
-} = require('./workflow/utils/dependencyBuilder')
-const {
-  isStructuralNode: isStructuralNodeHelper
-} = require('./workflow/utils/nodeClassifier')
-const {
-  wireImagesToStoryContext: wireImagesToStoryContextHelper
-} = require('./workflow/utils/imageWiring')
-const {
-  initializePipelineData: initializePipelineDataHelper
-} = require('./workflow/utils/pipelineInitializer')
-const {
   preserveStructuralNodeOutput: preserveStructuralNodeOutputHelper,
   rebuildStructuralNodeOutputs: rebuildStructuralNodeOutputsHelper
 } = require('./workflow/utils/structuralNodePreserver')
@@ -127,7 +108,7 @@ class WorkflowExecutionService {
   constructor() {
     // State Maps now managed by stateManager singleton
     // Access via: stateManager.executionState, stateManager.checkpointStates
-    // REMOVED: this.currentSession - use sessionService directly (Phase 3)
+    this.currentSession = null // Current execution session
     this.aiService = getAIProviderInstance()
   }
   
@@ -146,20 +127,122 @@ class WorkflowExecutionService {
   // REMOVED: evaluateCondition(), executeConditionAction() extracted to workflow/utils/conditionHelpers.js (Phase 8)
   // Use evaluateConditionHelper(), executeConditionActionHelper() from workflow/utils/conditionHelpers.js
 
-  // REMOVED: Session management wrapper methods (Phase 3)
-  // - checkForExistingSession() → use sessionService.checkForExistingSession() directly
-  // - startNewSession() → use sessionService.startNewSession() directly
-  // - resumeSession() → use sessionService.resumeSession() directly
-  // - updateSession() → use sessionService.updateSession() directly
-  // - completeSession() → use sessionService.stopSession() directly
-  // - handleExecutionError() → use sessionService.updateSession() directly for error handling
+  /**
+   * Check for existing session and offer resume option
+   * @param {string} flowId - Flow identifier
+   * @param {string} userId - User identifier
+   * @returns {Object} Session status and resume options
+   */
+  checkForExistingSession(flowId, userId) {
+    return sessionService.checkForExistingSession(flowId, userId)
+  }
 
-  // REMOVED: Test method wrappers (Phase 4)
-  // - preRunTest() → use preRunTestHelper() from workflow/testService.js directly
-  // - testNodeConfiguration() → use testNodeConfigurationHelper() from workflow/testService.js directly
-  // - testAIConnectivity() → use testAIConnectivityHelper() from workflow/testService.js directly
-  // - testExportServices() → use testExportServicesHelper() from workflow/testService.js directly
-  // - validateWorkflowStructure() → use validateWorkflowStructureHelper() from workflow/testService.js directly
+  /**
+   * Start new execution session
+   * @param {Object} params - Session parameters
+   * @returns {Object} Session data
+   */
+  startNewSession(params) {
+    const sessionData = sessionService.startNewSession(params)
+    this.currentSession = sessionData
+    console.log('🚀 New execution session started:', params.flowId)
+    return sessionData
+  }
+
+  /**
+   * Resume existing session
+   * @param {string} flowId - Flow identifier
+   * @param {string} userId - User identifier
+   * @returns {Object} Resumed session data
+   */
+  resumeSession(flowId, userId) {
+    const session = sessionService.resumeSession(flowId, userId)
+    this.currentSession = session
+    console.log('🔄 Resuming execution session:', flowId)
+    return session
+  }
+
+  /**
+   * Update session with current execution state
+   * @param {Object} updates - Updates to apply
+   */
+  updateSession(updates) {
+    this.currentSession = sessionService.updateSession(this.currentSession, updates)
+  }
+
+  /**
+   * Complete session and clear from storage
+   */
+  completeSession() {
+    if (!this.currentSession) {
+      console.warn('⚠️ No active session to complete')
+      return
+    }
+
+    console.log('✅ Execution session completed:', this.currentSession.flowId)
+    sessionService.stopSession(
+      this.currentSession.flowId,
+      this.currentSession.userId
+    )
+    this.currentSession = null
+  }
+
+  /**
+   * Handle execution error and save session for recovery
+   * @param {Error} error - Execution error
+   * @param {Object} context - Error context
+   */
+  handleExecutionError(error, context = {}) {
+    if (!this.currentSession) {
+      console.error('❌ Execution error with no active session:', error)
+      return
+    }
+
+    const errorData = {
+      error: error.message,
+      stack: error.stack,
+      context,
+      timestamp: new Date().toISOString()
+    }
+
+    this.updateSession({
+      errors: [...(this.currentSession.errors || []), errorData],
+      currentPhase: 'error_recovery'
+    })
+
+    console.error('❌ Execution error saved to session:', errorData)
+  }
+
+  /**
+   * PRE-RUN TEST SYSTEM - Validate flow before execution
+   * @param {Array} nodes - Workflow nodes
+   * @param {Array} edges - Workflow edges
+   * @param {Object} initialInput - User input
+   * @param {Function} progressCallback - Progress update callback
+   * @returns {Object} Test results and validation status
+   */
+  async preRunTest(nodes, edges, initialInput, progressCallback = null) {
+    return preRunTestHelper(nodes, edges, initialInput, progressCallback)
+  }
+
+  async testNodeConfiguration(node, initialInput) {
+    return testNodeConfigurationHelper(node, initialInput)
+  }
+
+  /**
+   * Test AI connectivity for all nodes
+   */
+  async testAIConnectivity(nodes) {
+    return testAIConnectivityHelper(nodes)
+  }
+
+  async testExportServices() {
+    return testExportServicesHelper()
+  }
+
+  validateWorkflowStructure(nodes, edges) {
+    return validateWorkflowStructureHelper(nodes, edges)
+  }
 
   /**
    * Execute a complete workflow with real AI calls and data flow
@@ -199,10 +282,29 @@ class WorkflowExecutionService {
       const executionOrder = buildExecutionOrderHelper(nodes, edges)
       
       // Build dependency maps for validation during execution
-      const { incomingEdges, outgoingEdges } = buildDependencyMapsHelper(nodes, edges)
+      const incomingEdges = new Map()
+      const outgoingEdges = new Map()
+      nodes.forEach(node => {
+        incomingEdges.set(node.id, [])
+        outgoingEdges.set(node.id, [])
+      })
+      edges.forEach(edge => {
+        outgoingEdges.get(edge.source).push(edge.target)
+        incomingEdges.get(edge.target).push(edge.source)
+      })
       
       // Initialize data pipeline with user input
-      let pipelineData = initializePipelineDataHelper(initialInput, workflowId, superAdminUser, executionOrder)
+      let pipelineData = {
+        userInput: initialInput,
+        nodeOutputs: {},
+        structuralNodeOutputs: {}, // SURGICAL FIX: Preserve structural node outputs separately
+        superAdminUser: superAdminUser,
+        metadata: {
+          workflowId,
+          executionTime: new Date(),
+          totalNodes: executionOrder.length
+        }
+      }
 
       console.log('🔍 WORKFLOW EXECUTION DEBUG:')
       console.log('  - Initial input:', initialInput)
@@ -379,8 +481,11 @@ class WorkflowExecutionService {
           }
           pipelineData.nodeOutputs[node.id] = decoratedNodeOutput
 
-          recordNodeTokenUsageHelper(
-            stateManager,
+          // SURGICAL FIX: Preserve structural node outputs separately
+          // ANY structural node (detected via canEditStructure permission) must reach Content Writer even if intermediate nodes exist
+          preserveStructuralNodeOutputHelper(node, decoratedNodeOutput, pipelineData)
+
+          this.recordNodeTokenUsage(
             workflowId,
             {
               nodeId: node.id,
@@ -394,10 +499,6 @@ class WorkflowExecutionService {
           console.log('  - Output type:', nodeOutput.type)
           console.log('  - Content length:', typeof nodeOutput.content === 'string' ? nodeOutput.content.length : 'N/A')
           console.log('  - Pipeline now has:', Object.keys(pipelineData.nodeOutputs).length, 'completed nodes')
-          
-          // SURGICAL FIX: Preserve structural node outputs separately
-          // Structural nodes (Story Architect, etc.) must reach Content Writer even if intermediate nodes exist
-          preserveStructuralNodeOutputHelper(node, nodeOutput, pipelineData)
           
           // SURGICAL FIX: Only update lastNodeOutput if node produced actual content
           // Skip gates/routing nodes that don't have content - they shouldn't overwrite Content Writer's output
@@ -421,7 +522,7 @@ class WorkflowExecutionService {
           const updatedState = {
             [`results.${node.id}`]: nodeOutput,
             nodeOutputs: pipelineData.nodeOutputs,
-            structuralNodeOutputs: pipelineData.structuralNodeOutputs, // SURGICAL: Preserve structural outputs in checkpoint
+            structuralNodeOutputs: pipelineData.structuralNodeOutputs || {}, // SURGICAL FIX: Preserve structural node outputs in checkpoint
             currentNodeIndex: i,
             completedNodes: executionOrder.slice(0, i + 1).map(n => n.id)
           }
@@ -467,7 +568,7 @@ class WorkflowExecutionService {
             nodeName: node.data.label,
             nodeIndex: i,
             nodeOutputs: pipelineData.nodeOutputs || {},
-            structuralNodeOutputs: pipelineData.structuralNodeOutputs || {}, // SURGICAL: Preserve structural outputs in checkpoint
+            structuralNodeOutputs: pipelineData.structuralNodeOutputs || {}, // SURGICAL FIX: Preserve structural node outputs in checkpoint
             userInput: pipelineData.userInput,
             executionOrder: executionOrder.map(n => ({ id: n.id, type: n.data.type })),
             completedNodes: executionOrder.slice(0, i).map(n => n.id),
@@ -670,8 +771,8 @@ class WorkflowExecutionService {
         const pipelineData = {
           userInput: checkpointData.userInput || inMemoryState.userInput || {},
           nodeOutputs: checkpointData.nodeOutputs || {},
-          lastNodeOutput: null,
-          structuralNodeOutputs: checkpointData.structuralNodeOutputs || {} // SURGICAL: Preserve structural outputs on resume
+          structuralNodeOutputs: checkpointData.structuralNodeOutputs || {}, // SURGICAL FIX: Restore structural node outputs
+          lastNodeOutput: null
         }
         
         const completedNodeIds = checkpointData.completedNodes || Object.keys(pipelineData.nodeOutputs)
@@ -680,7 +781,7 @@ class WorkflowExecutionService {
           pipelineData.lastNodeOutput = checkpointData.nodeOutputs[lastCompletedNodeId] || null
         }
         
-        // SURGICAL: Rebuild structuralNodeOutputs from nodeOutputs if not in checkpoint
+        // SURGICAL FIX: Rebuild structuralNodeOutputs from nodeOutputs if not in checkpoint
         rebuildStructuralNodeOutputsHelper(pipelineData)
         
         const executionOrder = this.calculateExecutionOrder(nodes, edges)
@@ -751,8 +852,8 @@ class WorkflowExecutionService {
       const pipelineData = {
         userInput: checkpointData.userInput || executionData.input_data || {},
         nodeOutputs: checkpointData.nodeOutputs || {},
-        lastNodeOutput: null,
-        structuralNodeOutputs: checkpointData.structuralNodeOutputs || {} // SURGICAL: Preserve structural outputs on resume
+        structuralNodeOutputs: checkpointData.structuralNodeOutputs || {}, // SURGICAL FIX: Restore structural node outputs
+        lastNodeOutput: null
       }
       
       // Get the last completed node output
@@ -762,16 +863,8 @@ class WorkflowExecutionService {
         pipelineData.lastNodeOutput = checkpointData.nodeOutputs[lastCompletedNodeId] || null
       }
       
-      // SURGICAL: Rebuild structuralNodeOutputs from nodeOutputs if not in checkpoint
-      if (Object.keys(pipelineData.structuralNodeOutputs).length === 0 && pipelineData.nodeOutputs) {
-        Object.entries(pipelineData.nodeOutputs).forEach(([nodeId, nodeOutput]) => {
-          const isStructural = nodeOutput.metadata?.permissions?.canEditStructure === true ||
-                             /structural|structure|narrative.*architect|story.*architect/i.test(nodeOutput.metadata?.nodeName || '')
-          if (isStructural && nodeOutput.content) {
-            pipelineData.structuralNodeOutputs[nodeId] = nodeOutput
-          }
-        })
-      }
+      // SURGICAL FIX: Rebuild structuralNodeOutputs from nodeOutputs if not in checkpoint
+      rebuildStructuralNodeOutputsHelper(pipelineData)
       
       // Calculate execution order
       const executionOrder = this.calculateExecutionOrder(nodes, edges)
@@ -870,7 +963,24 @@ class WorkflowExecutionService {
         {
           const result = await this.executeProcessNode(data, pipelineData, progressCallback, workflowId)
           // If this process produced images, wire them into storyContext for live display
-          wireImagesToStoryContextHelper(result, pipelineData, progressCallback, data)
+          try {
+            const imgs = result?.assets?.images
+            if (Array.isArray(imgs) && imgs.length > 0) {
+              pipelineData.storyContext = pipelineData.storyContext || { chapters: [], structural: {}, assets: { images: [] } }
+              const existing = Array.isArray(pipelineData.storyContext.assets?.images) ? pipelineData.storyContext.assets.images : []
+              pipelineData.storyContext.assets.images = existing.concat(imgs)
+              if (typeof progressCallback === 'function') {
+                progressCallback({
+                  nodeId: data.id,
+                  nodeName: data.label || data.id,
+                  status: 'executing',
+                  storyContext: pipelineData.storyContext
+                })
+              }
+            }
+          } catch (e) {
+            console.warn('⚠️ Image wiring skipped:', e?.message)
+          }
           return result
         }
       
@@ -890,31 +1000,215 @@ class WorkflowExecutionService {
 
   /**
    * Execute input node - validate and structure user input
-   * EXTRACTED: Logic moved to workflow/handlers/inputNodeHandler.js
    */
   async executeInputNode(nodeData, pipelineData) {
-    return executeInputNodeHelper(nodeData, pipelineData)
+    const { userInput } = pipelineData
+    const { testInputEnabled, testInputValues, processingInstructions } = nodeData
+
+    // Use test input values if enabled, otherwise use regular userInput
+    const inputToUse = testInputEnabled && testInputValues ? testInputValues : userInput
+    
+    console.log('🔍 INPUT NODE JSON WRAPPER:')
+    console.log('  - Using processingInstructions from nodePalettes.js')
+    console.log('  - inputToUse:', inputToUse)
+
+    // Create JSON wrapper as per nodePalettes.js instructions
+    const jsonWrapper = {
+      user_input: sanitizeUserInputForNextNode(inputToUse),
+      metadata: {
+        node_id: nodeData.id || 'input-node',
+        timestamp: new Date().toISOString(),
+        status: 'processed',
+        workflow_type: nodeData.role || 'universal'
+      },
+      next_node_data: {
+        original_input: inputToUse,
+        processing_instructions: 'All user data wrapped and ready for next node'
+      }
+    }
+
+    console.log('🔍 JSON WRAPPER CREATED:', jsonWrapper)
+
+    return {
+      type: 'input_json_wrapper',
+      content: jsonWrapper,
+      nodeName: nodeData.label || 'Input Processing',
+      metadata: {
+        nodeId: nodeData.id || 'input-node',
+        nodeName: nodeData.label || 'Input Processing',
+        timestamp: new Date(),
+        wrapperCreated: true
+      }
+    }
   }
 
   /**
    * Execute process node - call AI with real API requests
    * DYNAMIC MULTI-CHAPTER SUPPORT: Reads userInput.chapterCount and follows node instructions
-   * EXTRACTED: Routing logic moved to workflow/handlers/processNodeRouter.js
    */
   async executeProcessNode(nodeData, pipelineData, progressCallback = null, workflowId = null) {
-    return await routeProcessNodeHelper(
-      nodeData,
-      pipelineData,
-      workflowId,
-      {
-        executeNonAIProcessing: this.executeNonAIProcessing?.bind(this) || null,
-        executeImageGeneration: this.executeImageGeneration.bind(this),
-        generateMultipleChapters: this.generateMultipleChapters.bind(this),
-        executeContentRefinement: this.executeContentRefinement.bind(this),
-        executeSingleAIGeneration: this.executeSingleAIGeneration.bind(this)
-      },
-      progressCallback
-    )
+    const { 
+      aiEnabled, 
+      selectedModels, 
+      systemPrompt, 
+      userPrompt, 
+      temperature, 
+      maxTokens, 
+      inputInstructions,
+      processingInstructions
+    } = nodeData
+    
+    // PERMISSION ENFORCEMENT: Delegate to workflow permission service
+    const { role: nodeRole } = applyPermissions(nodeData, console)
+    
+    if (!aiEnabled) {
+      // Non-AI processing node
+      return this.executeNonAIProcessing(nodeData, pipelineData)
+    }
+
+    // STEP 1: RECEIVE - Get previous node output and store in previousNodePassover
+    const previousOutput = pipelineData.lastNodeOutput || pipelineData.userInput
+    const { userInput } = pipelineData
+    
+    // STEP 2: STORE - Store complete previous node data in previousNodePassover
+    const previousNodePassover = {
+      previousOutput: previousOutput,
+      originalUserInput: userInput,
+      timestamp: new Date().toISOString(),
+      nodeContext: 'stored_for_passover'
+    }
+    
+    // Add previousNodePassover to pipelineData for template processing
+    pipelineData.previousNodePassover = previousNodePassover
+    // Backward-compatible alias expected by prompts and templates
+    pipelineData.previous_node_output = previousNodePassover
+    
+    console.log('📦 PREVIOUS NODE PASSOVER: Stored previous data for context preservation')
+    console.log('   - Previous output keys:', Object.keys(previousOutput || {}))
+    console.log('   - User input keys:', Object.keys(userInput || {}))
+    
+    // CRITICAL: Extract user_input from JSON wrapper if available, otherwise fall back to userInput
+    let structuredData = userInput
+    
+    if (previousOutput?.content?.user_input) {
+      // Input node returned JSON wrapper - extract the user_input
+      structuredData = previousOutput.content.user_input
+      console.log('🔍 PROCESS NODE: Using user_input from JSON wrapper:', structuredData)
+    } else if (previousOutput?.structuredData) {
+      // Legacy fallback for old structuredData format
+      structuredData = previousOutput.structuredData
+      console.log('🔍 PROCESS NODE: Using legacy structuredData:', structuredData)
+    } else {
+      console.log('🔍 PROCESS NODE: Using direct userInput:', structuredData)
+    }
+    
+
+    // SURGICAL FIX: FORCE USER INPUT CHAPTER COUNT - Check user input FIRST, ignore preset contamination
+    let chapterCount = null
+    
+    // Priority 1: Direct user input (highest priority)
+    chapterCount = userInput.chapterCount || userInput.chapter_count || userInput['Chapter Count'] || userInput['Number of Chapters']
+    
+    // Priority 2: Structured data (from input node processing)  
+    if (!chapterCount) {
+      chapterCount = structuredData.chapterCount || structuredData.chapter_count || structuredData['Chapter Count'] || structuredData['Number of Chapters']
+    }
+    
+    console.log('🔍 CHAPTER COUNT EXTRACTION PRIORITY:')
+    console.log('  - userInput.chapter_count:', userInput.chapter_count)
+    console.log('  - userInput.chapterCount:', userInput.chapterCount)
+    console.log('  - structuredData.chapter_count:', structuredData.chapter_count)
+    console.log('  - FINAL chapterCount:', chapterCount)
+    
+    console.log('🔍 CHAPTER COUNT RAW EXTRACTION:', chapterCount, 'Type:', typeof chapterCount)
+    
+    // Parse chapter count if it's a string like "2-3" or "6-8" 
+    if (chapterCount && typeof chapterCount === 'string') {
+      if (chapterCount.includes('-')) {
+        // Take the higher number from ranges like "2-3" -> 3, "6-8" -> 8
+        const parts = chapterCount.split('-')
+        chapterCount = parseInt(parts[1]) || parseInt(parts[0]) || 1
+      } else {
+        chapterCount = parseInt(chapterCount) || 1
+      }
+    }
+    
+    console.log('🔍 CHAPTER COUNT AFTER PARSING:', chapterCount, 'Type:', typeof chapterCount)
+    
+    if (!chapterCount || chapterCount < 1) {
+      // NO AI DETERMINATION - Use sensible defaults based on content type
+      const wordCount = parseInt(structuredData.word_count || structuredData['Word Count'] || 2000)
+      
+      // Simple logical defaults without AI calls
+      if (wordCount <= 2000) {
+        chapterCount = 3
+      } else if (wordCount <= 5000) {
+        chapterCount = 4
+      } else if (wordCount <= 10000) {
+        chapterCount = 6
+      } else {
+        chapterCount = 8
+      }
+      
+      console.log('🔍 DEFAULT CHAPTER ASSIGNMENT:')
+      console.log('  - Word count:', wordCount)
+      console.log('  - Default chapters:', chapterCount)
+    } else {
+      console.log('🔍 USER-SPECIFIED CHAPTERS (RESPECTED):', chapterCount)
+    }
+    
+    console.log('🔍 CHAPTER COUNT DEBUG:')
+    console.log('  - structuredData:', structuredData)
+    console.log('  - structuredData.chapterCount:', structuredData.chapterCount)
+    console.log('  - structuredData.chapter_count:', structuredData.chapter_count)
+    console.log('  - structuredData["Chapter Count"]:', structuredData['Chapter Count'])
+    console.log('  - userInput.chapterCount:', userInput.chapterCount)
+    console.log('  - userInput.chapter_count:', userInput.chapter_count)
+    console.log('  - userInput["Chapter Count"]:', userInput['Chapter Count'])
+    console.log('  - Final chapterCount:', chapterCount)
+    console.log('  - Type:', typeof chapterCount)
+    
+    // CRITICAL: Distinguish between content generation and content refinement
+    // Use nodeRole from permission check above, with label-based fallback
+    const nodeLabel = (nodeData.label || '').toLowerCase()
+    const isLabelBasedWriter = nodeLabel.includes('writing') || 
+                               nodeLabel.includes('literary') || 
+                               nodeLabel.includes('narrative') || 
+                               nodeLabel.includes('content writer') ||
+                               nodeLabel.includes('technical writer') ||
+                               nodeLabel.includes('copywriter')
+    
+    const isContentWriter = nodeRole === 'content_writer' || 
+                           nodeRole === 'technical_writer' || 
+                           nodeRole === 'copywriter' ||
+                           isLabelBasedWriter
+    
+    const isEditor = nodeRole === 'editor'
+
+    console.log(`🔍 NODE ROLE CHECK: ${nodeRole}, isContentWriter: ${isContentWriter}, isEditor: ${isEditor}`)
+    console.log(`🔍 NODE LABEL: ${nodeData.label}`)
+    console.log(`🔍 LABEL-BASED WRITER DETECTION: ${isLabelBasedWriter}`)
+
+    // SURGICAL FIX: Detect image generation nodes and handle differently
+    const isImageNode = nodeRole === 'image_generator' || nodeRole === 'ecover_generator'
+    
+    if (isImageNode) {
+      // Image generation: Call specialized image generation handler
+      console.log(`🎨 STARTING IMAGE GENERATION (${nodeRole})`)
+      return await this.executeImageGeneration(nodeData, pipelineData, progressCallback, workflowId)
+    } else if (parseInt(chapterCount) > 1 && isContentWriter) {
+      // Multi-chapter generation: ONLY for content writing nodes
+      console.log(`🔍 STARTING MULTI-CHAPTER GENERATION: ${chapterCount} chapters`)
+      return await this.generateMultipleChapters(nodeData, pipelineData, parseInt(chapterCount), progressCallback, workflowId)
+    } else if (isEditor) {
+      // Content refinement: Editor processes existing content with checklist
+      console.log(`🔍 STARTING CONTENT REFINEMENT (Editor node)`)
+      return await this.executeContentRefinement(nodeData, pipelineData, progressCallback, workflowId)
+    } else {
+      // Single generation: For research, analysis, and other non-writing nodes
+      console.log(`🔍 STARTING SINGLE GENERATION (${isContentWriter ? 'content writer' : 'research/analysis node'})`)
+      return await this.executeSingleAIGeneration(nodeData, pipelineData, progressCallback, workflowId)
+    }
   }
 
   /**
@@ -1101,8 +1395,13 @@ class WorkflowExecutionService {
   // REMOVED: validateInputFields() extracted to workflow/utils/workflowUtils.js (Phase 7)
   // Use validateInputFieldsHelper() from workflow/utils/workflowUtils.js
 
-  // REMOVED: structureInputData() wrapper (Phase 7)
-  // Use structureInputDataHelper() directly from workflow/utils/inputProcessor.js
+  // REMOVED: structureInputData(), uploadFileToSupabase() extracted to workflow/utils/inputProcessor.js (Phase 8)
+  // Use structureInputDataHelper(), uploadFileToSupabaseHelper() from workflow/utils/inputProcessor.js
+  async structureInputData(userInput, inputFields) {
+    return structureInputDataHelper(userInput, inputFields, (file, fieldName) => 
+      uploadFileToSupabaseHelper(file, fieldName, getSupabase)
+    )
+  }
 
   // REMOVED: identifyMissingOptionals(), createNextNodeInstructions() already extracted to workflow/utils/workflowUtils.js (Phase 7)
   // Use identifyMissingOptionalsHelper(), createNextNodeInstructionsHelper() from workflow/utils/workflowUtils.js
@@ -1211,8 +1510,68 @@ class WorkflowExecutionService {
   // REMOVED: checkDatabaseStopSignal extracted to workflow/state/executionStateManager.js
   // Access via: stateManager.checkDatabaseStopSignal()
 
-  // REMOVED: recordNodeTokenUsage() extracted to workflow/helpers/tokenHelpers.js (Phase 6)
-  // Use recordNodeTokenUsageHelper(stateManager, workflowId, nodeMeta, nodeOutput) from tokenHelpers.js
+  recordNodeTokenUsage(workflowId, nodeMeta, nodeOutput) {
+    if (!workflowId || !nodeOutput) {
+      return
+    }
+
+    const metrics = deriveNodeTokenMetricsHelper(nodeOutput)
+    if (!metrics.hasData) {
+      return
+    }
+
+    // SURGICAL FIX: Ensure nodeOutput has token data directly for executionService.js to read
+    // This ensures nodeOutputs[nodeId].aiMetadata.tokens exists when executionService calculates totals
+    if (!nodeOutput.aiMetadata) {
+      nodeOutput.aiMetadata = {}
+    }
+    if (metrics.tokens > 0 && (!nodeOutput.aiMetadata.tokens || nodeOutput.aiMetadata.tokens === 0)) {
+      nodeOutput.aiMetadata.tokens = metrics.tokens
+    }
+    if (metrics.cost > 0 && (!nodeOutput.aiMetadata.cost || nodeOutput.aiMetadata.cost === 0)) {
+      nodeOutput.aiMetadata.cost = metrics.cost
+    }
+    if (metrics.words > 0 && (!nodeOutput.aiMetadata.words || nodeOutput.aiMetadata.words === 0)) {
+      nodeOutput.aiMetadata.words = metrics.words
+    }
+    // Also set at root level for compatibility
+    if (metrics.tokens > 0 && (!nodeOutput.tokens || nodeOutput.tokens === 0)) {
+      nodeOutput.tokens = metrics.tokens
+    }
+    if (!nodeOutput.aiMetadata.provider && metrics.provider) {
+      nodeOutput.aiMetadata.provider = metrics.provider
+    }
+    if (!nodeOutput.aiMetadata.model && metrics.model) {
+      nodeOutput.aiMetadata.model = metrics.model
+    }
+
+    const state = stateManager.getExecutionState(workflowId) || {}
+    const currentUsage = state.tokenUsage || { totalTokens: 0, totalCost: 0, totalWords: 0 }
+    const updatedUsage = {
+      totalTokens: currentUsage.totalTokens + metrics.tokens,
+      totalCost: currentUsage.totalCost + metrics.cost,
+      totalWords: currentUsage.totalWords + metrics.words
+    }
+
+    const ledgerEntry = {
+      nodeId: nodeMeta.nodeId,
+      nodeName: nodeMeta.nodeName,
+      nodeType: nodeMeta.nodeType,
+      tokens: metrics.tokens,
+      cost: metrics.cost,
+      words: metrics.words,
+      provider: metrics.provider || null,
+      model: metrics.model || null,
+      timestamp: new Date().toISOString()
+    }
+
+    const updatedLedger = Array.isArray(state.tokenLedger) ? [...state.tokenLedger, ledgerEntry] : [ledgerEntry]
+
+    stateManager.updateExecutionState(workflowId, {
+      tokenUsage: updatedUsage,
+      tokenLedger: updatedLedger
+    })
+  }
 
   // REMOVED: Token helper methods extracted to workflow/helpers/tokenHelpers.js (Phase 3)
   // - deriveNodeTokenMetrics() → use deriveNodeTokenMetricsHelper()
@@ -1223,7 +1582,7 @@ class WorkflowExecutionService {
   // - getTokenLedger() → use getTokenLedgerHelper(stateManager, workflowId, nodeOutputs)
   // These are now imported from workflow/helpers/tokenHelpers.js
   
-  // REMOVED: recordNodeTokenUsage() - extracted to workflow/helpers/tokenHelpers.js (Phase 6)
+  // KEPT: recordNodeTokenUsage() - uses stateManager, stays in class
 
   // REMOVED: __sanitizeUserInputForNextNode() - delegate wrapper, removed in Phase 6
   // Use sanitizeUserInputForNextNode() directly from workflow/inputSanitizer.js

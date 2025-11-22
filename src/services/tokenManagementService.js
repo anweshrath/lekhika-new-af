@@ -10,6 +10,8 @@ const normalizePolicy = (row) => {
     levelId: row.level_id,
     baseAllocation: row.base_allocation ?? 0,
     monthlyCap: row.monthly_cap ?? null,
+    monthlyAllocation: row.monthly_allocation ?? null,
+    allocationMode: row.allocation_mode ?? 'lifetime',
     rolloverPercent: Number(row.rollover_percent ?? 0),
     enforcementMode: row.enforcement_mode ?? 'monitor',
     priorityWeight: row.priority_weight ?? 1,
@@ -31,8 +33,10 @@ const normalizeWallet = (row) => {
     currentTokens: Number(row.current_tokens ?? 0),
     reservedTokens: Number(row.reserved_tokens ?? 0),
     lifetimeTokens: Number(row.lifetime_tokens ?? 0),
+    monthlyAllocationTokens: Number(row.monthly_allocation_tokens ?? 0),
     borrowedTokens: Number(row.borrowed_tokens ?? 0),
     lastResetAt: row.last_reset_at,
+    lastMonthlyReset: row.last_monthly_reset,
     nextResetAt: row.next_reset_at,
     status: row.status ?? 'active',
     metadata: row.metadata ?? {},
@@ -73,6 +77,8 @@ const normalizeUserPolicy = (row) => {
     levelId: row.level_id,
     baseAllocation: row.base_allocation ?? 0,
     monthlyCap: row.monthly_cap ?? null,
+    monthlyAllocation: row.monthly_allocation ?? null,
+    allocationMode: row.allocation_mode ?? null,
     rolloverPercent: Number(row.rollover_percent ?? 0),
     enforcementMode: row.enforcement_mode ?? 'monitor',
     priorityWeight: row.priority_weight ?? 10,
@@ -153,6 +159,8 @@ const tokenManagementService = {
       level_id: policy.levelId,
       base_allocation: Number(policy.baseAllocation ?? 0),
       monthly_cap: policy.monthlyCap != null ? Number(policy.monthlyCap) : null,
+      monthly_allocation: policy.monthlyAllocation != null ? Number(policy.monthlyAllocation) : null,
+      allocation_mode: policy.allocationMode ?? 'lifetime',
       rollover_percent: Number(policy.rolloverPercent ?? 0),
       enforcement_mode: policy.enforcementMode ?? 'monitor',
       priority_weight: Number(policy.priorityWeight ?? 1),
@@ -187,7 +195,16 @@ const tokenManagementService = {
   async fetchUserWallets({ levelId = null, status = null, limit = 100, search = '' } = {}) {
     const { data, error } = await supabase
       .from('user_token_wallets')
-      .select('*')
+      .select(`
+        *,
+        level:levels (
+          id,
+          name,
+          display_name,
+          description,
+          tier_level
+        )
+      `)
       .order('current_tokens', { ascending: false })
       .limit(limit)
 
@@ -281,6 +298,39 @@ const tokenManagementService = {
     return (data || []).map(normalizeLedgerEntry)
   },
 
+  /**
+   * Calculate actual execution token usage from ledger
+   * Only counts debits from workflow executions (source='worker' AND reason='workflow_execution*')
+   * This is the TRUE source of truth for "tokens used"
+   */
+  async getExecutionTokenUsage(userId) {
+    if (!userId) {
+      return 0
+    }
+
+    const { data, error } = await supabase
+      .from('user_token_ledger')
+      .select('amount, reason')
+      .eq('user_id', userId)
+      .eq('direction', 'debit')
+      .eq('source', 'worker')
+
+    if (error) {
+      console.error('❌ Failed to fetch execution token usage:', error)
+      return 0
+    }
+
+    // Filter for execution-related reasons only
+    const executionEntries = (data || []).filter(entry => {
+      const reason = entry.reason || ''
+      return reason === 'workflow_execution' || 
+             reason === 'workflow_execution_failed' ||
+             reason.startsWith('workflow_execution')
+    })
+
+    return executionEntries.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0)
+  },
+
   async adjustUserTokens({
     userId,
     amount,
@@ -347,7 +397,15 @@ const tokenManagementService = {
         throw error
       }
 
-      return this.fetchWalletByUser(userId)
+      const newWallet = await this.fetchWalletByUser(userId)
+      
+      // Auto-allocate tokens based on level policy
+      if (levelId && newWallet) {
+        await this.autoAllocateTokensForLevel(userId, levelId)
+        return this.fetchWalletByUser(userId)
+      }
+
+      return newWallet
     } catch (error) {
       console.error('❌ Failed to ensure wallet for user:', error)
       throw error
@@ -379,7 +437,77 @@ const tokenManagementService = {
       return null
     }
 
+    // Auto-allocate tokens based on new level policy
+    if (levelId) {
+      await this.autoAllocateTokensForLevel(baseWallet.userId, levelId)
+    }
+
     return this.fetchWalletByUser(baseWallet.userId)
+  },
+
+  async autoAllocateTokensForLevel(userId, levelId) {
+    try {
+      // Get current wallet to check if it's empty
+      const wallet = await this.fetchWalletByUser(userId)
+      if (!wallet) {
+        return // Wallet doesn't exist yet
+      }
+
+      // Only auto-allocate if wallet is empty (no tokens allocated yet)
+      const hasLifetimeTokens = (wallet.lifetimeTokens || 0) > 0
+      const hasMonthlyTokens = (wallet.monthlyAllocationTokens || 0) > 0
+      if (hasLifetimeTokens || hasMonthlyTokens) {
+        return // Wallet already has tokens, don't auto-allocate
+      }
+
+      // Get level policy
+      const { data: levelPolicy, error: policyError } = await supabase
+        .from('level_token_policies')
+        .select('*')
+        .eq('level_id', levelId)
+        .maybeSingle()
+
+      if (policyError) {
+        console.error('❌ Failed to fetch level policy for auto-allocation:', policyError)
+        return // Don't throw - level might not have a policy yet
+      }
+
+      if (!levelPolicy) {
+        return // No policy, nothing to allocate
+      }
+
+      const allocationMode = levelPolicy.allocation_mode || 'lifetime'
+      const baseAllocation = Number(levelPolicy.base_allocation || 0)
+      const monthlyAllocation = Number(levelPolicy.monthly_allocation || 0)
+
+      // Only auto-allocate if there's an allocation amount
+      if (allocationMode === 'lifetime' && baseAllocation > 0) {
+        // Credit lifetime tokens
+        await this.adjustUserTokens({
+          userId,
+          amount: baseAllocation,
+          changeType: 'credit',
+          reason: 'level_assignment_auto_allocation',
+          source: 'system',
+          levelId,
+          metadata: { levelId, allocationMode: 'lifetime' }
+        })
+      } else if (allocationMode === 'monthly' && monthlyAllocation > 0) {
+        // Credit monthly allocation tokens
+        await this.adjustUserTokens({
+          userId,
+          amount: monthlyAllocation,
+          changeType: 'credit',
+          reason: 'level_assignment_auto_allocation',
+          source: 'system',
+          levelId,
+          metadata: { levelId, allocationMode: 'monthly' }
+        })
+      }
+    } catch (error) {
+      console.error('❌ Failed to auto-allocate tokens for level:', error)
+      // Don't throw - this is a convenience feature, not critical
+    }
   },
 
   async searchUsers(query = '', limit = 10) {
@@ -499,6 +627,8 @@ const tokenManagementService = {
       level_id: policy.levelId || null,
       base_allocation: Number(policy.baseAllocation ?? 0),
       monthly_cap: policy.monthlyCap == null || policy.monthlyCap === '' ? null : Number(policy.monthlyCap),
+      monthly_allocation: policy.monthlyAllocation == null || policy.monthlyAllocation === '' ? null : Number(policy.monthlyAllocation),
+      allocation_mode: policy.allocationMode || null,
       rollover_percent: Number(policy.rolloverPercent ?? 0),
       enforcement_mode: policy.enforcementMode || 'monitor',
       priority_weight: Number(policy.priorityWeight ?? 10),
@@ -535,6 +665,19 @@ const tokenManagementService = {
     }
 
     return true
+  },
+
+  async resetMonthlyTokenAllocation(userId = null) {
+    const { data, error } = await supabase.rpc('reset_monthly_token_allocation', {
+      p_user_id: userId
+    })
+
+    if (error) {
+      console.error('❌ Failed to reset monthly token allocation:', error)
+      throw error
+    }
+
+    return data
   },
 
   notifySuccess(message) {

@@ -1,31 +1,6 @@
 BEGIN;
 
-CREATE TABLE IF NOT EXISTS public.user_token_policies (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE UNIQUE,
-  level_id uuid REFERENCES public.levels(id) ON DELETE SET NULL,
-  base_allocation integer NOT NULL DEFAULT 0,
-  monthly_cap integer,
-  rollover_percent numeric(5,2) NOT NULL DEFAULT 0,
-  enforcement_mode text NOT NULL DEFAULT 'monitor',
-  priority_weight integer NOT NULL DEFAULT 10,
-  allow_manual_override boolean NOT NULL DEFAULT true,
-  notes text,
-  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-  reset_anchor timestamptz,
-  next_reset_at timestamptz,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT user_token_policies_enforcement_mode_check CHECK (enforcement_mode = ANY(ARRAY['monitor','warn','hard'])),
-  CONSTRAINT user_token_policies_rollover_check CHECK (rollover_percent >= 0 AND rollover_percent <= 100)
-);
-
-CREATE INDEX IF NOT EXISTS user_token_policies_level_id_idx ON public.user_token_policies(level_id);
-CREATE INDEX IF NOT EXISTS user_token_policies_enforcement_idx ON public.user_token_policies(enforcement_mode);
-CREATE INDEX IF NOT EXISTS user_token_policies_reset_anchor_idx ON public.user_token_policies(reset_anchor);
-
-DROP FUNCTION IF EXISTS public.adjust_user_tokens(uuid, bigint, text, text, jsonb, uuid, text, text, uuid, uuid);
-
+-- Update adjust_user_tokens function to support both lifetime and monthly allocation modes
 CREATE OR REPLACE FUNCTION public.adjust_user_tokens(
   p_user_id uuid,
   p_amount bigint,
@@ -51,12 +26,15 @@ DECLARE
   v_new_balance bigint;
   v_new_reserved bigint;
   v_new_lifetime bigint;
+  v_new_monthly_allocation_tokens bigint;
   v_result public.user_token_ledger%ROWTYPE;
   v_policy_enforcement text := 'monitor';
   v_policy_monthly_cap integer;
   v_policy_allow_override boolean := true;
   v_policy_rollover numeric(5,2) := 0;
   v_policy_source text := 'none';
+  v_allocation_mode text := 'lifetime';
+  v_monthly_allocation integer;
   v_effective_level_id uuid;
   v_period_anchor timestamptz := date_trunc('month', now());
   v_monthly_usage bigint := 0;
@@ -99,6 +77,7 @@ BEGIN
 
   v_effective_level_id := COALESCE(p_level_id, v_wallet.level_id);
 
+  -- Get user policy (overrides level policy)
   SELECT * INTO v_user_policy
   FROM public.user_token_policies
   WHERE user_id = p_user_id;
@@ -109,9 +88,12 @@ BEGIN
     v_policy_monthly_cap := v_user_policy.monthly_cap;
     v_policy_allow_override := v_user_policy.allow_manual_override;
     v_policy_rollover := v_user_policy.rollover_percent;
+    v_allocation_mode := COALESCE(v_user_policy.allocation_mode, 'lifetime');
+    v_monthly_allocation := v_user_policy.monthly_allocation;
     v_period_anchor := COALESCE(v_user_policy.reset_anchor, date_trunc('month', now()));
     v_effective_level_id := COALESCE(v_user_policy.level_id, v_effective_level_id);
   ELSIF v_effective_level_id IS NOT NULL THEN
+    -- Get level policy (fallback if no user policy)
     SELECT * INTO v_level_policy
     FROM public.level_token_policies
     WHERE level_id = v_effective_level_id;
@@ -121,15 +103,23 @@ BEGIN
       v_policy_monthly_cap := v_level_policy.monthly_cap;
       v_policy_allow_override := v_level_policy.allow_manual_override;
       v_policy_rollover := v_level_policy.rollover_percent;
+      v_allocation_mode := COALESCE(v_level_policy.allocation_mode, 'lifetime');
+      v_monthly_allocation := v_level_policy.monthly_allocation;
       v_period_anchor := date_trunc('month', now());
     END IF;
+  END IF;
+
+  -- Default to lifetime if not set
+  IF v_allocation_mode IS NULL OR v_allocation_mode NOT IN ('lifetime', 'monthly') THEN
+    v_allocation_mode := 'lifetime';
   END IF;
 
   IF v_policy_enforcement IS NULL OR v_policy_enforcement NOT IN ('monitor','warn','hard') THEN
     v_policy_enforcement := 'monitor';
   END IF;
 
-  IF (v_direction = 'reserve' OR v_direction = 'debit') AND v_policy_monthly_cap IS NOT NULL THEN
+  -- Monthly cap enforcement (only for lifetime mode)
+  IF v_allocation_mode = 'lifetime' AND (v_direction = 'reserve' OR v_direction = 'debit') AND v_policy_monthly_cap IS NOT NULL THEN
     SELECT COALESCE(SUM(amount), 0) INTO v_monthly_usage
     FROM public.user_token_ledger
     WHERE user_id = p_user_id
@@ -150,52 +140,98 @@ BEGIN
   v_new_balance := v_wallet.current_tokens;
   v_new_reserved := v_wallet.reserved_tokens;
   v_new_lifetime := v_wallet.lifetime_tokens;
+  v_new_monthly_allocation_tokens := COALESCE(v_wallet.monthly_allocation_tokens, 0);
 
+  -- CREDIT LOGIC: Credits work for both lifetime and monthly modes
   IF v_direction = 'credit' THEN
-    -- Credit: Add to lifetime_tokens (total allocated tokens)
-    v_new_lifetime := v_new_lifetime + v_abs_amount;
-  ELSIF v_direction = 'debit' THEN
-    -- SURGICAL FIX: 
-    -- Execution debits: Add to current_tokens (used/spent tokens)
-    -- Manual debits: Subtract from lifetime_tokens (reduce total allocated)
-    IF p_source = 'worker' AND p_reason IS NOT NULL AND (p_reason LIKE 'workflow_execution%' OR p_reason = 'workflow_execution' OR p_reason = 'workflow_execution_failed') THEN
-      -- Execution debit: Increment current_tokens (track tokens spent)
-      v_new_balance := v_new_balance + v_abs_amount;
+    IF v_allocation_mode = 'lifetime' THEN
+      -- Lifetime mode: Add to lifetime_tokens (total allocated)
+      v_new_lifetime := v_new_lifetime + v_abs_amount;
     ELSE
-      -- Manual debit: Subtract from lifetime_tokens (reduce total allocated)
-      IF v_new_lifetime < v_abs_amount THEN
-        RAISE EXCEPTION 'Insufficient allocated tokens. Allocated: %, requested: %', v_new_lifetime, v_abs_amount;
+      -- Monthly mode: Add to monthly_allocation_tokens (current month's pool)
+      v_new_monthly_allocation_tokens := v_new_monthly_allocation_tokens + v_abs_amount;
+    END IF;
+  ELSIF v_direction = 'debit' THEN
+    -- DEBIT LOGIC: Different handling for execution vs manual debits
+    IF p_source = 'worker' AND p_reason IS NOT NULL AND (p_reason LIKE 'workflow_execution%' OR p_reason = 'workflow_execution' OR p_reason = 'workflow_execution_failed') THEN
+      -- Execution debit: Track tokens spent
+      IF v_allocation_mode = 'lifetime' THEN
+        -- Lifetime mode: Increment current_tokens (used/spent)
+        v_new_balance := v_new_balance + v_abs_amount;
+      ELSE
+        -- Monthly mode: Decrement monthly_allocation_tokens (spend from monthly pool)
+        IF v_new_monthly_allocation_tokens < v_abs_amount THEN
+          RAISE EXCEPTION 'Insufficient monthly tokens. Available: %, requested: %', v_new_monthly_allocation_tokens, v_abs_amount;
+        END IF;
+        v_new_monthly_allocation_tokens := v_new_monthly_allocation_tokens - v_abs_amount;
       END IF;
-      v_new_lifetime := v_new_lifetime - v_abs_amount;
+    ELSE
+      -- Manual debit: Reduce allocated tokens
+      IF v_allocation_mode = 'lifetime' THEN
+        -- Lifetime mode: Subtract from lifetime_tokens (reduce total allocated)
+        IF v_new_lifetime < v_abs_amount THEN
+          RAISE EXCEPTION 'Insufficient allocated tokens. Allocated: %, requested: %', v_new_lifetime, v_abs_amount;
+        END IF;
+        v_new_lifetime := v_new_lifetime - v_abs_amount;
+      ELSE
+        -- Monthly mode: Subtract from monthly_allocation_tokens (reduce current month's pool)
+        IF v_new_monthly_allocation_tokens < v_abs_amount THEN
+          RAISE EXCEPTION 'Insufficient monthly tokens. Available: %, requested: %', v_new_monthly_allocation_tokens, v_abs_amount;
+        END IF;
+        v_new_monthly_allocation_tokens := v_new_monthly_allocation_tokens - v_abs_amount;
+      END IF;
     END IF;
   ELSIF v_direction = 'reserve' THEN
-    IF v_new_balance < v_abs_amount THEN
-      RAISE EXCEPTION 'Insufficient tokens to reserve. Available: %, requested: %', v_new_balance, v_abs_amount;
+    -- Reserve logic depends on allocation mode
+    IF v_allocation_mode = 'lifetime' THEN
+      -- Lifetime mode: Reserve from available (lifetime - current)
+      IF (v_new_lifetime - v_new_balance) < v_abs_amount THEN
+        RAISE EXCEPTION 'Insufficient tokens to reserve. Available: %, requested: %', (v_new_lifetime - v_new_balance), v_abs_amount;
+      END IF;
+      v_new_balance := v_new_balance - v_abs_amount;
+      v_new_reserved := v_new_reserved + v_abs_amount;
+    ELSE
+      -- Monthly mode: Reserve from monthly_allocation_tokens
+      IF v_new_monthly_allocation_tokens < v_abs_amount THEN
+        RAISE EXCEPTION 'Insufficient monthly tokens to reserve. Available: %, requested: %', v_new_monthly_allocation_tokens, v_abs_amount;
+      END IF;
+      v_new_monthly_allocation_tokens := v_new_monthly_allocation_tokens - v_abs_amount;
+      v_new_reserved := v_new_reserved + v_abs_amount;
     END IF;
-    v_new_balance := v_new_balance - v_abs_amount;
-    v_new_reserved := v_new_reserved + v_abs_amount;
   ELSIF v_direction = 'release' THEN
+    -- Release reserved tokens back to available pool
     IF v_new_reserved < v_abs_amount THEN
       RAISE EXCEPTION 'Insufficient reserved tokens to release. Reserved: %, requested: %', v_new_reserved, v_abs_amount;
     END IF;
-    v_new_balance := v_new_balance + v_abs_amount;
+    IF v_allocation_mode = 'lifetime' THEN
+      -- Lifetime mode: Release back to current_tokens
+      v_new_balance := v_new_balance + v_abs_amount;
+    ELSE
+      -- Monthly mode: Release back to monthly_allocation_tokens
+      v_new_monthly_allocation_tokens := v_new_monthly_allocation_tokens + v_abs_amount;
+    END IF;
     v_new_reserved := v_new_reserved - v_abs_amount;
   ELSE
+    -- Adjustment: Direct balance change
     v_new_balance := v_new_balance + p_amount;
   END IF;
 
-  IF v_new_balance < 0 OR v_new_reserved < 0 THEN
+  -- Validation: Ensure no negative balances
+  IF v_new_balance < 0 OR v_new_reserved < 0 OR v_new_lifetime < 0 OR v_new_monthly_allocation_tokens < 0 THEN
     RAISE EXCEPTION 'Token balances cannot be negative';
   END IF;
 
+  -- Update wallet
   UPDATE public.user_token_wallets
   SET current_tokens = v_new_balance,
       reserved_tokens = v_new_reserved,
       lifetime_tokens = v_new_lifetime,
+      monthly_allocation_tokens = v_new_monthly_allocation_tokens,
       updated_at = now()
   WHERE id = v_wallet.id
   RETURNING * INTO v_wallet;
 
+  -- Create ledger entry
   INSERT INTO public.user_token_ledger (
     wallet_id,
     user_id,
@@ -230,7 +266,9 @@ BEGIN
       'policy_source', v_policy_source,
       'policy_enforcement', v_policy_enforcement,
       'policy_monthly_cap', v_policy_monthly_cap,
-      'policy_rollover_percent', v_policy_rollover
+      'policy_rollover_percent', v_policy_rollover,
+      'allocation_mode', v_allocation_mode,
+      'monthly_allocation', v_monthly_allocation
     )
   )
   RETURNING * INTO v_result;
@@ -239,16 +277,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.adjust_user_tokens IS 'Adjusts user token balances with policy enforcement and creates immutable ledger entries';
-
-ALTER TABLE public.user_token_policies ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Allow all on user_token_policies" ON public.user_token_policies;
-CREATE POLICY "SuperAdmin full access on user_token_policies"
-  ON public.user_token_policies
-  FOR ALL
-  USING (true)
-  WITH CHECK (true);
+COMMENT ON FUNCTION public.adjust_user_tokens IS 'Adjusts user token balances with policy enforcement. Supports both lifetime and monthly allocation modes.';
 
 COMMIT;
 

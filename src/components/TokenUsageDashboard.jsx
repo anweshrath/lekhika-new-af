@@ -173,12 +173,14 @@ const TokenUsageDashboard = () => {
     models: engine.models || []
   }))
 
-  const totalAllocated = walletStats.total || walletStats.rawTotal || summary.totalTokens
-  const totalUsed = walletStats.used || summary.totalTokens
-  const totalAvailable =
-    walletStats.available != null
-      ? walletStats.available
-      : Math.max(totalAllocated - totalUsed, 0)
+  // SURGICAL FIX: ALWAYS use wallet balance, NEVER use summary.totalTokens (that's historical usage, not balance)
+  // summary.totalTokens = total tokens USED historically (431k), NOT the wallet balance
+  // walletStats.total = actual wallet balance (currentTokens + lifetimeTokens)
+  const totalAllocated = walletStats.total || walletStats.rawTotal || 0 // NEVER fallback to summary.totalTokens
+  const totalUsed = walletStats.used || 0 // NEVER fallback to summary.totalTokens
+  const totalAvailable = walletStats.available != null
+    ? walletStats.available
+    : Math.max(totalAllocated - totalUsed, 0)
 
   const summaryCards = [
     {
@@ -223,9 +225,9 @@ const TokenUsageDashboard = () => {
           <div className="mt-3 flex flex-wrap items-center gap-3 text-sm" style={{ color: 'var(--color-text-muted)' }}>
             <span className="inline-flex items-center gap-2 rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-300">
               <Zap className="h-3.5 w-3.5 text-emerald-300" />
-              {formatNumber(walletStats.total > 0 ? walletStats.used : summary?.totalTokens || 0)}
+              {formatNumber(walletStats.used || 0)}
               <span className="text-[11px] font-medium">
-                {' '}/ {formatNumber(walletStats.total || summary?.totalTokens || 0)} tokens
+                {' '}/ {formatNumber(walletStats.total || walletStats.rawTotal || 0)} tokens
               </span>
             </span>
             <span>

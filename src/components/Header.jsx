@@ -103,7 +103,7 @@ const Header = ({ isAdmin = false }) => {
                 Tokens Used
               </span>
               <span className="text-sm font-bold" style={{ color: currentTheme.colors.text }}>
-                {formatNumber(tokenStats.used)}
+                {formatNumber(tokenStats.used || 0)}
                 <span className="text-xs font-medium" style={{ color: currentTheme.colors.textMuted }}>
                   {' '}/ {formatNumber(tokenStats.total || tokenStats.rawTotal || 0)}
                 </span>

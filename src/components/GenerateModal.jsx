@@ -35,9 +35,11 @@ import {
 } from 'lucide-react'
 import FormFieldRenderer from './FormFieldRenderer'
 import UserExecutionModal from './UserExecutionModal'
+import TokenLimitExceededModal from './TokenLimitExceededModal'
 import { engineFormService } from '../services/engineFormService'
 import { useUserAuth } from '../contexts/UserAuthContext'
 import { useTheme } from '../contexts/ThemeContext'
+import useTokenWallet from '../hooks/useTokenWallet'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
 import UltraButton from './UltraButton'
@@ -85,6 +87,7 @@ const GenerateModal = ({
 
   const { user } = useUserAuth()
   const { currentTheme, isDark } = useTheme()
+  const { stats: walletStats, wallet, policy } = useTokenWallet()
   const modalControls = useAnimation()
   const particleControls = useAnimation()
   const [formData, setFormData] = useState({})
@@ -117,6 +120,7 @@ const GenerateModal = ({
   const [particles, setParticles] = useState([])
   const [isModalVisible, setIsModalVisible] = useState(false)
   const [isFormMinimized, setIsFormMinimized] = useState(false)
+  const [showTokenLimitModal, setShowTokenLimitModal] = useState(false)
 
   // Enhanced particle system for celebrations
   const createCelebrationParticles = useCallback((count = 20) => {
@@ -1006,6 +1010,29 @@ const GenerateModal = ({
       return
     }
 
+    // SURGICAL FIX: Check token limit before execution
+    if (walletStats && policy?.effective) {
+      const policyLimit = policy.effective.monthlyCap || policy.effective.baseAllocation
+      const currentTokens = walletStats.used || 0
+      const availableTokens = walletStats.available || 0
+
+      // Check if user has exceeded policy limit
+      if (policyLimit && policyLimit > 0 && currentTokens >= policyLimit) {
+        console.warn('🚫 Token limit exceeded:', { currentTokens, policyLimit, availableTokens })
+        setShowTokenLimitModal(true)
+        setIsSubmitting(false)
+        return
+      }
+
+      // Check if available tokens are insufficient (less than 1000 as safety buffer)
+      if (availableTokens < 1000) {
+        console.warn('⚠️ Low token balance:', { availableTokens, policyLimit })
+        setShowTokenLimitModal(true)
+        setIsSubmitting(false)
+        return
+      }
+    }
+
     setIsSubmitting(true)
 
     try {
@@ -1397,6 +1424,15 @@ const GenerateModal = ({
 
   return (
     <>
+      {/* Token Limit Exceeded Modal */}
+      <TokenLimitExceededModal
+        isOpen={showTokenLimitModal}
+        onClose={() => setShowTokenLimitModal(false)}
+        currentTokens={walletStats?.used || 0}
+        policyLimit={policy?.effective?.monthlyCap || policy?.effective?.baseAllocation || 0}
+        availableTokens={walletStats?.available || 0}
+      />
+
       {/* Form Modal */}
       {isOpen && engine && formConfig && !isFormMinimized && (
         <AnimatePresence>

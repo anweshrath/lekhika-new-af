@@ -81,9 +81,25 @@ const buildPersonalPolicyFormState = (overridePolicy, fallbackPolicy) => {
         ? String(resolvedFallback.rolloverPercent)
         : '0'
 
+  const allocationMode =
+    resolvedOverride.allocationMode != null
+      ? resolvedOverride.allocationMode
+      : resolvedFallback.allocationMode != null
+        ? resolvedFallback.allocationMode
+        : 'lifetime'
+
+  const monthlyAllocation =
+    resolvedOverride.monthlyAllocation != null
+      ? String(resolvedOverride.monthlyAllocation)
+      : resolvedFallback.monthlyAllocation != null
+        ? String(resolvedFallback.monthlyAllocation)
+        : ''
+
   return {
     baseAllocation,
     monthlyCap,
+    monthlyAllocation,
+    allocationMode,
     rolloverPercent,
     enforcementMode: resolvedOverride.enforcementMode || resolvedFallback.enforcementMode || 'monitor',
     allowManualOverride:
@@ -345,6 +361,8 @@ const TokenManagement = () => {
       levelId: policy?.levelId ?? levelOptions[0]?.id ?? levels[0]?.id ?? null,
       baseAllocation: policy?.baseAllocation ?? 0,
       monthlyCap: policy?.monthlyCap ?? '',
+      monthlyAllocation: policy?.monthlyAllocation ?? '',
+      allocationMode: policy?.allocationMode ?? 'lifetime',
       rolloverPercent: policy?.rolloverPercent ?? 0,
       enforcementMode: policy?.enforcementMode ?? 'monitor',
       priorityWeight: policy?.priorityWeight ?? 1,
@@ -366,7 +384,9 @@ const TokenManagement = () => {
     try {
       const payload = {
         ...policyForm,
-        monthlyCap: policyForm.monthlyCap === '' ? null : Number(policyForm.monthlyCap)
+        monthlyCap: policyForm.monthlyCap === '' ? null : Number(policyForm.monthlyCap),
+        monthlyAllocation: policyForm.monthlyAllocation === '' ? null : Number(policyForm.monthlyAllocation),
+        allocationMode: policyForm.allocationMode || 'lifetime'
       }
       const saved = await tokenManagementService.upsertLevelPolicy(payload)
       setPolicies((prev) => {
@@ -427,6 +447,8 @@ const TokenManagement = () => {
         levelId: selectedWallet.levelId,
         baseAllocation: userPolicyForm.baseAllocation === '' ? 0 : Number(userPolicyForm.baseAllocation),
         monthlyCap: userPolicyForm.monthlyCap === '' ? null : Number(userPolicyForm.monthlyCap),
+        monthlyAllocation: userPolicyForm.monthlyAllocation === '' ? null : Number(userPolicyForm.monthlyAllocation),
+        allocationMode: userPolicyForm.allocationMode || null,
         rolloverPercent: userPolicyForm.rolloverPercent === '' ? 0 : Number(userPolicyForm.rolloverPercent),
         enforcementMode: userPolicyForm.enforcementMode,
         allowManualOverride: userPolicyForm.allowManualOverride,
@@ -538,12 +560,14 @@ const TokenManagement = () => {
       (acc, wallet) => {
         acc.totalWallets += 1
         acc.activeWallets += wallet.status === 'active' ? 1 : 0
-        acc.totalCurrent += Number(wallet.currentTokens ?? 0)
+        // currentTokens = tokens spent/used (from execution debits)
+        acc.totalUsed += Number(wallet.currentTokens ?? 0)
         acc.totalReserved += Number(wallet.reservedTokens ?? 0)
-        acc.totalLifetime += Number(wallet.lifetimeTokens ?? 0)
+        // lifetimeTokens = total allocated (from credits)
+        acc.totalAllocated += Number(wallet.lifetimeTokens ?? 0)
         return acc
       },
-      { totalWallets: 0, activeWallets: 0, totalCurrent: 0, totalReserved: 0, totalLifetime: 0 }
+      { totalWallets: 0, activeWallets: 0, totalUsed: 0, totalReserved: 0, totalAllocated: 0 }
     )
   }, [wallets])
 
@@ -615,15 +639,15 @@ const TokenManagement = () => {
         <UltraCard className="p-6 bg-gradient-to-br from-amber-900/80 to-amber-800/60 border border-amber-700/50">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-xs uppercase tracking-wide text-amber-200">Tokens in Circulation</p>
-              <p className="text-2xl font-bold text-white">{formatNumber(walletStats.totalCurrent)}</p>
+              <p className="text-xs uppercase tracking-wide text-amber-200">Total Allocated</p>
+              <p className="text-2xl font-bold text-white">{formatNumber(walletStats.totalAllocated)}</p>
             </div>
             <div className="p-3 bg-amber-700/40 rounded-xl">
               <Coins className="w-5 h-5 text-amber-200" />
             </div>
           </div>
           <p className="text-xs text-amber-100">
-            {formatNumber(walletStats.totalReserved)} reserved · {formatNumber(walletStats.totalLifetime)} lifetime spend
+            {formatNumber(walletStats.totalUsed)} spent · {formatNumber(Math.max(walletStats.totalAllocated - walletStats.totalUsed, 0))} available · {formatNumber(walletStats.totalReserved)} reserved
           </p>
         </UltraCard>
       </div>
@@ -815,16 +839,17 @@ const TokenManagement = () => {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">User</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Level</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Balance</th>
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">Allocation</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Available</th>
                   <th className="px-6 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Reserved</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Lifetime</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Allocated</th>
                   <th className="px-6 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
                 </tr>
               </thead>
               <tbody className="bg-slate-900 divide-y divide-slate-800">
                 {walletLoading ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                    <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
                       <div className="flex flex-col items-center gap-3">
                         <UltraLoader type="pulse" size="md" />
                         <span className="text-sm">Loading wallets...</span>
@@ -833,13 +858,15 @@ const TokenManagement = () => {
                   </tr>
                 ) : wallets.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-slate-500">
+                    <td colSpan={7} className="px-6 py-10 text-center text-slate-500">
                       No wallets match your filters yet.
                     </td>
                   </tr>
                 ) : (
                   wallets.map((wallet) => {
                     const level = wallet.level || levelMap.get(wallet.levelId)
+                    const levelPolicy = policies.find((p) => p.levelId === wallet.levelId)
+                    const allocationMode = levelPolicy?.allocationMode || 'lifetime'
                     const isSelected = selectedWallet?.id === wallet.id
                     return (
                       <tr
@@ -857,8 +884,19 @@ const TokenManagement = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                           {level?.display_name || level?.name || '—'}
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <span
+                            className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${
+                              allocationMode === 'monthly'
+                                ? 'bg-blue-500/20 text-blue-300'
+                                : 'bg-purple-500/20 text-purple-300'
+                            }`}
+                          >
+                            {allocationMode === 'monthly' ? 'Monthly' : 'Lifetime'}
+                          </span>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-emerald-300">
-                          {formatNumber(wallet.currentTokens)}
+                          {formatNumber(Math.max((wallet.lifetimeTokens || 0) - (wallet.currentTokens || 0), 0))}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-amber-300">
                           {formatNumber(wallet.reservedTokens)}
@@ -911,9 +949,9 @@ const TokenManagement = () => {
             <div className="px-6 py-5 space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-800/50 border border-slate-800 rounded-xl p-4">
-                  <p className="text-xs uppercase text-slate-400">Current balance</p>
+                  <p className="text-xs uppercase text-slate-400">Available Tokens</p>
                   <p className="text-xl font-semibold text-emerald-300 mt-1">
-                    {formatNumber(selectedWallet.currentTokens)}
+                    {formatNumber(Math.max((selectedWallet.lifetimeTokens || 0) - (selectedWallet.currentTokens || 0), 0))}
                   </p>
                     </div>
                 <div className="bg-slate-800/50 border border-slate-800 rounded-xl p-4">
@@ -923,9 +961,15 @@ const TokenManagement = () => {
                   </p>
                     </div>
                 <div className="bg-slate-800/50 border border-slate-800 rounded-xl p-4">
-                  <p className="text-xs uppercase text-slate-400">Lifetime spent</p>
+                  <p className="text-xs uppercase text-slate-400">Total Allocated</p>
                   <p className="text-xl font-semibold text-slate-200 mt-1">
                     {formatNumber(selectedWallet.lifetimeTokens)}
+                  </p>
+                    </div>
+                <div className="bg-slate-800/50 border border-slate-800 rounded-xl p-4">
+                  <p className="text-xs uppercase text-slate-400">Tokens Spent</p>
+                  <p className="text-xl font-semibold text-rose-300 mt-1">
+                    {formatNumber(selectedWallet.currentTokens)}
                   </p>
                     </div>
                 <div className="bg-slate-800/50 border border-slate-800 rounded-xl p-4">
@@ -984,34 +1028,69 @@ const TokenManagement = () => {
                   </div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-4">
                       <div>
-                        <label className="block text-xs uppercase text-slate-400 mb-1">Base allocation</label>
-                        <UltraInput
-                          type="number"
-                          min="0"
-                          value={userPolicyForm.baseAllocation}
-                          onChange={(e) => handleUserPolicyFieldChange('baseAllocation', e.target.value)}
-                          placeholder="Inherited"
-                        />
+                        <label className="block text-xs uppercase text-slate-400 mb-1">Allocation Mode</label>
+                        <select
+                          className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                          value={userPolicyForm.allocationMode || 'lifetime'}
+                          onChange={(e) => handleUserPolicyFieldChange('allocationMode', e.target.value)}
+                        >
+                          <option value="">Inherit from level</option>
+                          <option value="lifetime">Lifetime Tokens (Accumulated)</option>
+                          <option value="monthly">Monthly Tokens (Resets Monthly)</option>
+                        </select>
                         <p className="text-[11px] text-slate-500 mt-1">
-                          Inherited: {inheritedPolicy ? formatNumber(inheritedPolicy.baseAllocation) : '0'}
+                          Inherited: {inheritedPolicy?.allocationMode || 'lifetime'}
                         </p>
                       </div>
-                      <div>
-                        <label className="block text-xs uppercase text-slate-400 mb-1">Monthly cap</label>
-                        <UltraInput
-                          type="number"
-                          min="0"
-                          value={userPolicyForm.monthlyCap}
-                          onChange={(e) => handleUserPolicyFieldChange('monthlyCap', e.target.value)}
-                          placeholder="Unlimited"
-                        />
-                        <p className="text-[11px] text-slate-500 mt-1">
-                          Inherited:{' '}
-                          {inheritedPolicy?.monthlyCap != null ? formatNumber(inheritedPolicy.monthlyCap) : 'Unlimited'}
-                        </p>
-                      </div>
+
+                      {userPolicyForm.allocationMode === 'lifetime' || (!userPolicyForm.allocationMode && (inheritedPolicy?.allocationMode || 'lifetime') === 'lifetime') ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs uppercase text-slate-400 mb-1">Base allocation</label>
+                            <UltraInput
+                              type="number"
+                              min="0"
+                              value={userPolicyForm.baseAllocation}
+                              onChange={(e) => handleUserPolicyFieldChange('baseAllocation', e.target.value)}
+                              placeholder="Inherited"
+                            />
+                            <p className="text-[11px] text-slate-500 mt-1">
+                              Inherited: {inheritedPolicy ? formatNumber(inheritedPolicy.baseAllocation) : '0'}
+                            </p>
+                          </div>
+                          <div>
+                            <label className="block text-xs uppercase text-slate-400 mb-1">Monthly cap</label>
+                            <UltraInput
+                              type="number"
+                              min="0"
+                              value={userPolicyForm.monthlyCap}
+                              onChange={(e) => handleUserPolicyFieldChange('monthlyCap', e.target.value)}
+                              placeholder="Unlimited"
+                            />
+                            <p className="text-[11px] text-slate-500 mt-1">
+                              Inherited:{' '}
+                              {inheritedPolicy?.monthlyCap != null ? formatNumber(inheritedPolicy.monthlyCap) : 'Unlimited'}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-xs uppercase text-slate-400 mb-1">Monthly allocation</label>
+                          <UltraInput
+                            type="number"
+                            min="1"
+                            value={userPolicyForm.monthlyAllocation}
+                            onChange={(e) => handleUserPolicyFieldChange('monthlyAllocation', e.target.value)}
+                            placeholder="Inherited"
+                          />
+                          <p className="text-[11px] text-slate-500 mt-1">
+                            Inherited: {inheritedPolicy?.monthlyAllocation ? formatNumber(inheritedPolicy.monthlyAllocation) : 'Not set'}
+                          </p>
+                        </div>
+                      )}
+
                       <div>
                         <label className="block text-xs uppercase text-slate-400 mb-1">Rollover %</label>
                         <UltraInput
@@ -1107,13 +1186,31 @@ const TokenManagement = () => {
                           <span className="text-slate-200 font-semibold">{effectivePolicySource}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-400">Monthly cap</span>
+                          <span className="text-slate-400">Total allocated</span>
                           <span className="text-slate-200 font-semibold">
-                            {effectivePolicy?.monthlyCap != null
-                              ? formatNumber(effectivePolicy.monthlyCap)
-                              : 'Unlimited'}
+                            {formatNumber(selectedWallet.lifetimeTokens || 0)}
                           </span>
                         </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">Tokens spent</span>
+                          <span className="text-slate-200 font-semibold">
+                            {formatNumber(selectedWallet.currentTokens || 0)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">Available</span>
+                          <span className="text-slate-200 font-semibold">
+                            {formatNumber(Math.max((selectedWallet.lifetimeTokens || 0) - (selectedWallet.currentTokens || 0), 0))}
+                          </span>
+                        </div>
+                        {effectivePolicy?.monthlyCap != null && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Monthly cap</span>
+                            <span className="text-slate-200 font-semibold">
+                              {formatNumber(effectivePolicy.monthlyCap)}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between">
                           <span className="text-slate-400">Rollover</span>
                           <span className="text-slate-200 font-semibold">
@@ -1232,27 +1329,60 @@ const TokenManagement = () => {
             </div>
           )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-2">Allocation Mode</label>
+                    <select
+                      value={policyForm.allocationMode}
+                      onChange={(e) => handlePolicyChange('allocationMode', e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    >
+                      <option value="lifetime">Lifetime Tokens (Accumulated)</option>
+                      <option value="monthly">Monthly Tokens (Resets Monthly)</option>
+                    </select>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      {policyForm.allocationMode === 'lifetime' 
+                        ? 'Tokens accumulate over time. Monthly cap limits spending per month.'
+                        : 'Tokens reset monthly. Rollover applies to unused tokens.'}
+                    </p>
+                  </div>
+
+                  {policyForm.allocationMode === 'lifetime' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-2">Base allocation</label>
+                        <UltraInput
+                          type="number"
+                          value={policyForm.baseAllocation}
+                          min={0}
+                          onChange={(e) => handlePolicyChange('baseAllocation', Number(e.target.value))}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-2">Monthly cap</label>
+                        <UltraInput
+                          type="number"
+                          value={policyForm.monthlyCap}
+                          min={0}
+                          onChange={(e) => handlePolicyChange('monthlyCap', e.target.value === '' ? '' : Number(e.target.value))}
+                          placeholder="Unlimited"
+                        />
+                      </div>
+                    </div>
+                  ) : (
                     <div>
-                      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-2">Base allocation</label>
+                      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-2">Monthly allocation</label>
                       <UltraInput
                         type="number"
-                        value={policyForm.baseAllocation}
-                        min={0}
-                        onChange={(e) => handlePolicyChange('baseAllocation', Number(e.target.value))}
+                        value={policyForm.monthlyAllocation}
+                        min={1}
+                        onChange={(e) => handlePolicyChange('monthlyAllocation', e.target.value === '' ? '' : Number(e.target.value))}
+                        placeholder="Tokens allocated each month"
                       />
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Number of tokens allocated to users each month. Resets automatically.
+                      </p>
                     </div>
-                    <div>
-                      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-2">Monthly cap</label>
-                      <UltraInput
-                        type="number"
-                        value={policyForm.monthlyCap}
-                        min={0}
-                        onChange={(e) => handlePolicyChange('monthlyCap', e.target.value === '' ? '' : Number(e.target.value))}
-                        placeholder="Unlimited"
-                      />
-                    </div>
-              </div>
+                  )}
               
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>

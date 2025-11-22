@@ -12,13 +12,15 @@ const normalizeWalletSnapshot = (wallet, policy) => {
       total: 0,
       remaining: 0,
       usagePercent: 0,
-      rawTotal: 0
+      rawTotal: 0,
+      allocationMode: 'lifetime'
     };
   }
 
-  const available = Number(wallet.currentTokens || 0);
+  const currentTokens = Number(wallet.currentTokens || 0);
   const reserved = Number(wallet.reservedTokens || 0);
-  const lifetime = Number(wallet.lifetimeTokens || 0);
+  const lifetimeTokens = Number(wallet.lifetimeTokens || 0);
+  const monthlyAllocationTokens = Number(wallet.monthlyAllocationTokens || 0);
 
   const normalizeBound = (value) => {
     if (value == null) return null;
@@ -26,33 +28,48 @@ const normalizeWalletSnapshot = (wallet, policy) => {
     return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
   };
 
+  // Determine allocation mode (user policy overrides level policy)
+  const allocationMode = policy?.allocationMode || 'lifetime';
+  const monthlyAllocation = normalizeBound(policy?.monthlyAllocation);
   const policyCap = normalizeBound(policy?.monthlyCap);
   const baseAllocation = normalizeBound(policy?.baseAllocation);
 
-  let total = policyCap ?? baseAllocation ?? null;
-  let used;
+  let total, used, available, policyLimit;
 
-  if (total != null) {
-    if (total < 0) total = 0;
-    used = Math.max(total - available, 0);
-    if (used > total) used = total;
+  if (allocationMode === 'monthly') {
+    // MONTHLY MODE:
+    // total = monthly_allocation (from policy)
+    // available = monthly_allocation_tokens (current month's pool)
+    // used = monthly_allocation - monthly_allocation_tokens (spent this month)
+    total = monthlyAllocation || 0;
+    available = monthlyAllocationTokens;
+    used = total - available;
+    policyLimit = monthlyAllocation; // Monthly allocation is the limit
   } else {
-    total = available + lifetime;
-    used = lifetime;
+    // LIFETIME MODE:
+    // lifetime_tokens = Total allocated (from credits)
+    // current_tokens = Tokens spent (from execution debits)
+    // available = lifetime_tokens - current_tokens (calculated)
+    total = lifetimeTokens;
+    used = currentTokens;
+    available = total - used;
+    policyLimit = policyCap ?? baseAllocation ?? null;
   }
 
-  const remaining = Math.max(total - used, 0);
-  const usagePercent = total > 0 ? used / total : 0;
+  const remaining = Math.max(available, 0);
+  const usagePercent = policyLimit && policyLimit > 0 ? Math.min(used / policyLimit, 1) : 0;
 
   return {
     available,
     reserved,
-    lifetime,
+    lifetime: lifetimeTokens,
     used,
     total,
     remaining,
     usagePercent,
-    rawTotal: available + lifetime
+    rawTotal: total,
+    policyLimit,
+    allocationMode
   };
 };
 
@@ -120,13 +137,8 @@ const useTokenWallet = () => {
         }
 
         const effectivePolicy = userPolicy || levelPolicy || null;
+        
         const normalizedStats = normalizeWalletSnapshot(walletData, effectivePolicy);
-        console.debug('[TokenWallet] Computed stats', {
-          userId,
-          stats: normalizedStats,
-          userPolicy,
-          levelPolicy
-        });
 
         if (isMounted) {
           setWallet(walletData);
@@ -158,7 +170,29 @@ const useTokenWallet = () => {
     };
   }, [user?.id, user?.user_id]);
 
-  const stats = useMemo(() => normalizeWalletSnapshot(wallet, policy?.effective), [wallet, policy]);
+  // SURGICAL FIX: Only recalculate when wallet or executionUsage changes
+  // Policy is only used for limit checking (usagePercent), not for display calculation (total)
+  // CRITICAL: total is ALWAYS actualBalance (available + lifetime), never policy limit
+  // CRITICAL: used is ALWAYS executionUsage from ledger (actual token spend), not wallet.lifetimeTokens
+  // This prevents the flash when policy loads after wallet
+  const stats = useMemo(() => {
+    if (!wallet) {
+      return {
+        available: 0,
+        reserved: 0,
+        lifetime: 0,
+        used: 0,
+        total: 0,
+        remaining: 0,
+        usagePercent: 0,
+        rawTotal: 0,
+        policyLimit: null
+      };
+    }
+    // Always use the latest wallet data, policy is only for enforcement
+    // Display MUST show whatever is in the wallet
+    return normalizeWalletSnapshot(wallet, policy?.effective);
+  }, [wallet, policy?.effective]);
 
   return {
     wallet,
