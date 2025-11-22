@@ -41,8 +41,8 @@ const limits = [25, 50, 100, 250]
 
 const formatNumber = (value = 0) => {
   if (value == null) return '0'
-  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
-  if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(1)}K`
+  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
+  if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(2)}K`
   return Number(value).toLocaleString()
 }
 
