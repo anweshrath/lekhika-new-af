@@ -1,0 +1,24 @@
+
+[functions.engines-api]
+enabled = true
+verify_jwt = true
+import_map = "./functions/engines-api/deno.json"
+entrypoint = "./functions/engines-api/index.ts"
+
+[functions.internal-execute]
+enabled = true
+verify_jwt = false
+import_map = "./functions/internal-execute/deno.json"
+entrypoint = "./functions/internal-execute/index.ts"
+
+[functions.process-executions]
+enabled = true
+verify_jwt = false
+import_map = "./functions/process-executions/deno.json"
+entrypoint = "./functions/process-executions/index.ts"
+
+[functions.process-and-save-book]
+enabled = true
+verify_jwt = false
+import_map = "./functions/process-and-save-book/deno.json"
+entrypoint = "./functions/process-and-save-book/index.ts"

@@ -1,0 +1,320 @@
+/* 
+  src/styles/BookReader.css 
+  SURGICAL STRIKE: Contrast & Theme Unification.
+*/
+
+/* --- MAIN READER CONTAINER (Used by Compact View) --- */
+.book-reader-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+/* 
+  The reader itself should have no container-level padding.
+*/
+.compact-reader {
+  background: var(--color-background);
+  padding: 2.5rem; /* Add back padding for the content itself */
+  width: 100%;
+}
+
+/* --- FULLSCREEN FLIP BOOK OVERLAY --- */
+.fullscreen-reader-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 5000;
+  /* SURGICAL STRIKE: The backdrop is the main background color. This is correct. */
+  background: var(--color-background); 
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+}
+
+.fullscreen-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 100;
+  /* DELETED: All color/background/border rules are now in BookReaderTheme.css */
+}
+
+.flipbook-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+  overflow: hidden;
+}
+
+.html-flip-book {
+  box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+  border: 1px solid var(--color-border);
+}
+
+/* SURGICAL STRIKE: The book's "paper" is now guaranteed to be the lighter surface color for contrast. */
+.page {
+  padding: 3rem;
+  background: var(--color-surface); /* This is the correct variable for the book's paper. */
+  color: var(--color-text);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--theme-primary) var(--color-surface);
+}
+.page::-webkit-scrollbar { width: 10px; }
+.page::-webkit-scrollbar-track { background: transparent; }
+.page::-webkit-scrollbar-thumb {
+  background-color: var(--theme-primary);
+  border-radius: 5px;
+}
+
+.page-content {
+  /* No special styling needed */
+}
+
+/* --- UNIVERSAL HIGH-CONTRAST TYPOGRAPHY --- */
+.book-content {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  /* SURGICAL STRIKE: Force high contrast on all text to override database styles. */
+  color: var(--color-text) !important; 
+}
+.book-content p {
+  line-height: 1.9;
+  color: var(--color-text) !important; /* Annihilate low-contrast grey. */
+  margin-bottom: 1.75rem;
+  font-size: 1.15rem;
+}
+.fullscreen-reader-overlay .book-content a,
+.compact-reader .book-content a {
+  color: var(--theme-primary-strong) !important;
+  text-decoration: underline;
+}
+.book-content h1, .book-content h2, .book-content h3, .book-content h4 {
+  color: var(--color-text-emphasis) !important; /* Annihilate low-contrast grey. */
+  font-family: 'Helvetica Neue', 'Arial', sans-serif;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  line-height: 1.3;
+}
+.book-content h1 { font-size: 2.75rem; border-bottom: 2px solid var(--color-border); padding-bottom: 0.5rem; }
+.book-content h2 { font-size: 2.25rem; }
+.book-content h3 { font-size: 1.75rem; }
+
+/* --- UNIVERSAL CONTROLS --- */
+.pagination-controls {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  z-index: 10;
+}
+.pagination-button, .pagination-display {
+  padding: 0.8rem 1.2rem;
+  border-radius: 0.5rem;
+  /* SURGICAL STRIKE: Use a solid, theme-aware background for max contrast. */
+  background: var(--color-surface); 
+  border: 1px solid var(--color-border-strong);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  /* SURGICAL STRIKE: Force high-contrast text color. */
+  color: var(--color-text-emphasis) !important;
+}
+.pagination-button { 
+  cursor: pointer; 
+  color: var(--color-text-emphasis) !important; /* Ensure icons also have contrast */
+}
+.pagination-button:disabled { 
+  opacity: 0.5; 
+  cursor: not-allowed; 
+}
+
+/* SURGICAL STRIKE: Add media query to fix dog shit mobile design. */
+@media (max-width: 768px) {
+  .page {
+    padding: 1.5rem; /* Annihilate shitty padding on mobile. */
+    background: var(--color-surface); /* Ensure consistency on mobile */
+  }
+
+  .book-content p {
+    font-size: 1rem; /* Improve typography for readability. */
+    line-height: 1.8;
+  }
+
+  .book-content h1 { font-size: 2rem; }
+  .book-content h2 { font-size: 1.75rem; }
+  .book-content h3 { font-size: 1.5rem; }
+}
+
+/* --- SCROLL MODE & TOC STYLING --- */
+.reader-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.reader-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem 4rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.reader-scroll section {
+  margin-bottom: 4rem;
+  page-break-inside: avoid;
+}
+
+.reader-scroll section#title-page {
+  text-align: center;
+  padding: 6rem 2rem;
+  margin-bottom: 4rem;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.reader-scroll section#title-page h1 {
+  font-size: 3.5em;
+  margin-bottom: 1rem;
+  font-weight: 700;
+}
+
+.reader-scroll section#foreword,
+.reader-scroll section#introduction {
+  padding: 2rem;
+  background: rgba(var(--theme-primary-rgb), 0.05);
+  border-left: 4px solid var(--theme-primary);
+  border-radius: 0.5rem;
+  margin: 2rem 0;
+}
+
+.reader-scroll section#toc {
+  padding: 2rem;
+  background: rgba(var(--theme-primary-rgb), 0.08);
+  border-radius: 0.5rem;
+  margin: 2rem 0;
+}
+
+.reader-scroll section#toc ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.reader-scroll section#toc li {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.reader-scroll section#toc a {
+  color: var(--theme-primary);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.reader-scroll section#toc a:hover {
+  color: var(--theme-primary-strong);
+}
+
+.reader-scroll section[id^="chapter"] {
+  margin: 3rem 0;
+  padding: 2rem 0;
+  border-top: 2px solid var(--color-border);
+}
+
+.reader-scroll section[id^="chapter"] h2 {
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+  color: var(--theme-primary);
+}
+
+.reader-scroll section#about-author {
+  margin-top: 4rem;
+  padding: 2rem;
+  background: rgba(var(--theme-primary-rgb), 0.1);
+  border-radius: 0.5rem;
+  border: 1px solid var(--theme-primary);
+}
+
+.reader-toc {
+  position: sticky;
+  top: 80px;
+  width: 240px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  padding: 1.5rem;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+}
+
+.reader-toc-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin-bottom: 1rem;
+}
+
+.reader-toc ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.reader-toc-item {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  cursor: pointer;
+  border-radius: 0.375rem;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+}
+
+.reader-toc-item:hover {
+  background: var(--color-surface-hover);
+  color: var(--theme-primary);
+}
+
+.reader-toc-item.active {
+  background: rgba(var(--theme-primary-rgb), 0.15);
+  color: var(--theme-primary);
+  font-weight: 600;
+}
+
+.reader-progress {
+  position: absolute;
+  top: 60px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--color-border);
+  z-index: 50;
+}
+
+.reader-progress-inner {
+  height: 100%;
+  background: var(--theme-primary);
+  transition: width 0.3s ease;
+}

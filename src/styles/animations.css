@@ -1,0 +1,577 @@
+/* ========================================
+   LEKHIKA 2.0 - DOPAMINE-DRIVEN ANIMATIONS
+   Ultra-satisfying micro-interactions
+   ======================================== */
+
+/* ============ BUTTON ANIMATIONS ============ */
+
+/* Primary Button - Maximum Juice */
+.btn-ultra {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+}
+
+.btn-ultra:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 
+    0 10px 40px -10px var(--theme-primary),
+    0 0 0 1px var(--theme-primary),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-ultra:active {
+  transform: scale(0.98) translateY(0px);
+  box-shadow: 
+    0 5px 20px -5px var(--theme-primary),
+    inset 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Ripple Effect */
+.btn-ultra::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.btn-ultra:active::before {
+  width: 300px;
+  height: 300px;
+}
+
+/* Shimmer Effect on Hover */
+.btn-ultra::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.btn-ultra:hover::after {
+  left: 100%;
+}
+
+/* ============ CARD ANIMATIONS ============ */
+
+.card-ultra {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+  position: relative;
+}
+
+.card-ultra:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 
+    0 20px 60px -10px rgba(0, 0, 0, 0.3),
+    0 0 0 1px var(--theme-primary),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.card-ultra:active {
+  transform: translateY(-4px) scale(1.01);
+}
+
+/* Glow Pulse on Hover */
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px var(--theme-primary);
+  }
+  50% {
+    box-shadow: 0 0 40px var(--theme-primary), 0 0 60px var(--theme-primary);
+  }
+}
+
+.card-ultra:hover::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: var(--theme-gradient-primary);
+  border-radius: inherit;
+  z-index: -1;
+  opacity: 0;
+  animation: glow-pulse 2s ease-in-out infinite;
+  transition: opacity 0.3s;
+}
+
+.card-ultra:hover::before {
+  opacity: 0.5;
+}
+
+/* ============ INPUT ANIMATIONS ============ */
+
+.input-ultra {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.input-ultra:focus {
+  transform: scale(1.01);
+  box-shadow: 
+    0 0 0 3px var(--theme-primary),
+    0 10px 40px -10px var(--theme-primary),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  outline: none;
+}
+
+.input-ultra:hover:not(:focus) {
+  box-shadow: 
+    0 0 0 1px var(--theme-primary),
+    0 5px 20px -5px var(--theme-primary);
+}
+
+/* Animated Border on Focus */
+@keyframes border-dance {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.input-ultra-wrapper {
+  position: relative;
+}
+
+.input-ultra-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: var(--theme-gradient-primary);
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.3s;
+  background-size: 200% 200%;
+  animation: border-dance 3s ease infinite;
+}
+
+.input-ultra-wrapper:focus-within::before {
+  opacity: 1;
+}
+
+/* ============ LOADING ANIMATIONS ============ */
+
+/* Shimmer Loader */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.skeleton-ultra {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 0%,
+    var(--color-surface-hover) 50%,
+    var(--color-surface) 100%
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+  border-radius: 8px;
+}
+
+/* Pulse Loader */
+@keyframes pulse-ultra {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.95);
+  }
+}
+
+.pulse-ultra {
+  animation: pulse-ultra 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Spinning Loader with Gradient */
+@keyframes spin-ultra {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner-ultra {
+  border: 3px solid transparent;
+  border-top: 3px solid var(--theme-primary);
+  border-right: 3px solid var(--theme-secondary);
+  border-radius: 50%;
+  animation: spin-ultra 1s linear infinite;
+}
+
+/* ============ HOVER LIFT ============ */
+
+.lift-on-hover {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lift-on-hover:hover {
+  transform: translateY(-4px);
+}
+
+/* ============ SCALE INTERACTIONS ============ */
+
+.scale-on-hover {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scale-on-hover:hover {
+  transform: scale(1.05);
+}
+
+.scale-on-click:active {
+  transform: scale(0.95);
+}
+
+/* ============ GLOW EFFECTS ============ */
+
+.glow-on-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glow-on-hover:hover {
+  box-shadow: 
+    0 0 20px var(--theme-primary),
+    0 0 40px var(--theme-primary),
+    inset 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+/* Animated Glow */
+@keyframes glow-breathe {
+  0%, 100% {
+    box-shadow: 0 0 20px var(--theme-primary);
+  }
+  50% {
+    box-shadow: 0 0 40px var(--theme-primary), 0 0 60px var(--theme-secondary);
+  }
+}
+
+.glow-breathe {
+  animation: glow-breathe 3s ease-in-out infinite;
+}
+
+/* ============ FLOAT ANIMATION ============ */
+
+@keyframes float-gentle {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.float-gentle {
+  animation: float-gentle 4s ease-in-out infinite;
+}
+
+/* ============ STAGGER ANIMATIONS ============ */
+
+.stagger-fade-in > * {
+  opacity: 0;
+  animation: fade-slide-in 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.stagger-fade-in > *:nth-child(1) { animation-delay: 0.1s; }
+.stagger-fade-in > *:nth-child(2) { animation-delay: 0.2s; }
+.stagger-fade-in > *:nth-child(3) { animation-delay: 0.3s; }
+.stagger-fade-in > *:nth-child(4) { animation-delay: 0.4s; }
+.stagger-fade-in > *:nth-child(5) { animation-delay: 0.5s; }
+.stagger-fade-in > *:nth-child(6) { animation-delay: 0.6s; }
+.stagger-fade-in > *:nth-child(7) { animation-delay: 0.7s; }
+.stagger-fade-in > *:nth-child(8) { animation-delay: 0.8s; }
+.stagger-fade-in > *:nth-child(9) { animation-delay: 0.9s; }
+.stagger-fade-in > *:nth-child(10) { animation-delay: 1.0s; }
+
+@keyframes fade-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============ SUCCESS ANIMATIONS ============ */
+
+@keyframes success-bounce {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.success-bounce {
+  animation: success-bounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* ============ BADGE ANIMATIONS ============ */
+
+@keyframes badge-pop {
+  0% {
+    transform: scale(0) rotate(-180deg);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.2) rotate(10deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.badge-pop {
+  animation: badge-pop 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* ============ GRADIENT TEXT ============ */
+
+.text-gradient {
+  background: var(--theme-gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-animated {
+  background: var(--theme-gradient-primary);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-shift 3s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* ============ BORDER ANIMATIONS ============ */
+
+@keyframes border-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.border-spin::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(
+    from 0deg,
+    var(--theme-primary),
+    var(--theme-secondary),
+    var(--theme-accent),
+    var(--theme-primary)
+  );
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: border-spin 3s linear infinite;
+}
+
+/* ============ TOOLTIP ANIMATIONS ============ */
+
+.tooltip-ultra {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.tooltip-ultra.show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* ============ MODAL ENTRANCE ============ */
+
+@keyframes modal-entrance {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-entrance {
+  animation: modal-entrance 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============ PROGRESS BAR ============ */
+
+.progress-ultra {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-surface);
+  border-radius: 9999px;
+}
+
+.progress-ultra-bar {
+  height: 100%;
+  background: var(--theme-gradient-primary);
+  border-radius: inherit;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-ultra-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+/* ============ CHECKBOX/RADIO ANIMATIONS ============ */
+
+.checkbox-ultra {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--theme-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.checkbox-ultra:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 10px var(--theme-primary);
+}
+
+.checkbox-ultra:checked {
+  background: var(--theme-gradient-primary);
+  border-color: transparent;
+}
+
+.checkbox-ultra:checked::after {
+  content: '✓';
+  position: absolute;
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: success-bounce 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* ============ NOTIFICATION SLIDE IN ============ */
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.notification-slide {
+  animation: slide-in-right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============ ICON BOUNCE ============ */
+
+@keyframes icon-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.icon-bounce:hover {
+  animation: icon-bounce 0.6s ease-in-out;
+}
+
+/* ============ UTILITY CLASSES ============ */
+
+.transition-smooth {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.transition-bounce {
+  transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.cursor-ultra {
+  cursor: pointer;
+  user-select: none;
+}
+
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+}
+

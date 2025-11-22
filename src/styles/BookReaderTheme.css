@@ -1,0 +1,94 @@
+/* 
+  SURGICAL STRIKE - FINAL ATTEMPT.
+  This file now HIJACKS the core theme variables instead of fighting them.
+  This is the correct, professional solution.
+*/
+
+/* --- READER THEME: LIGHT --- */
+/*
+  By redefining the core variables here, any component inside the reader
+  will automatically use these colors without needing specific overrides.
+*/
+.reader-theme-light {
+  --color-background: #FFFFFF;
+  --color-surface: #F8FAFC;
+  --color-surface-hover: #F1F5F9;
+  --color-border: #E2E8F0;
+  --color-text: #1E293B;
+  --color-text-emphasis: #000000;
+  --color-text-muted: #64748B;
+  
+  /* Make sure book content uses pure white/black for max contrast */
+  background: #FFFFFF !important;
+  color: #111111 !important;
+}
+
+.reader-theme-light .book-content h1,
+.reader-theme-light .book-content h2,
+.reader-theme-light .book-content h3,
+.reader-theme-light .book-content h4 {
+  color: #000000 !important;
+}
+
+
+/* --- READER THEME: DARK --- */
+.reader-theme-dark {
+  --color-background: #000000;
+  --color-surface: #1A1A1A;
+  --color-surface-hover: #2A2A2A;
+  --color-border: #333333;
+  --color-text: #EAEAEA;
+  --color-text-emphasis: #FFFFFF;
+  --color-text-muted: #B0B0B0;
+
+  /* Your requested colors for max contrast */
+  background: #000000 !important;
+  color: #EAEAEA !important;
+}
+
+.reader-theme-dark .book-content h1,
+.reader-theme-dark .book-content h2,
+.reader-theme-dark .book-content h3,
+.reader-theme-dark .book-content h4 {
+  color: #FFFFFF !important;
+}
+
+
+/* --- Universal Reader Styles --- */
+/* 
+  These styles are now much simpler. They don't need !important tags
+  because they will naturally inherit the correct, hijacked variables.
+*/
+.book-reader-modal-content,
+.fullscreen-reader-overlay {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.book-reader-modal-content header,
+.fullscreen-header {
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.book-reader-modal-content header h2,
+.fullscreen-header h1 {
+  color: var(--color-text-emphasis);
+}
+
+.book-reader-modal-content header p,
+.fullscreen-header p {
+  color: var(--color-text); /* CORRECTED: Use the main high-contrast text color */
+}
+
+.book-reader-modal-content header button,
+.fullscreen-header button,
+.pagination-controls button,
+.p-2 { /* Catches the toggle button */
+  color: var(--color-text);
+}
+
+.page {
+  background-color: var(--color-background);
+}

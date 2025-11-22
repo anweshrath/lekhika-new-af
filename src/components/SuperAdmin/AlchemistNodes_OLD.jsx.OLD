@@ -1,0 +1,940 @@
+/**
+ * ALCHEMIST MASTER NODES
+ * Beautiful nodes with dynamic styling from database
+ * Completely isolated from main Flow system
+ */
+
+import React, { useState, useEffect } from 'react'
+import { Handle, Position } from '@xyflow/react'
+import { 
+  FileText, Settings, GitBranch, Building2, Download,
+  Copy, Save, Play, TestTube, Globe, Eye, Zap, Brain, Trash2, Target, Sparkles, Layers
+} from 'lucide-react'
+import { alchemistNodePaletteService } from '../../services/alchemistNodePaletteService'
+import { alchemistNodeStyleService } from '../../services/alchemistNodeStyleService'
+import toast from 'react-hot-toast'
+
+// Hook to get dynamic node styles
+const useAlchemistNodeStyles = () => {
+  const [nodeStyles, setNodeStyles] = useState({})
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const loadStyles = async () => {
+      try {
+        const styles = await alchemistNodeStyleService.getNodeStyles()
+        setNodeStyles(styles)
+      } catch (error) {
+        console.error('Error loading Alchemist node styles:', error)
+        setNodeStyles(alchemistNodeStyleService.getDefaultStyleSchemes())
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadStyles()
+  }, [])
+
+  return { nodeStyles, isLoading }
+}
+
+// Beautiful Node Template (matching FlowNodes.jsx styling)
+const createBeautifulAlchemistNode = (nodeType, defaultIcon = '⚙️', onDelete = null) => {
+  return ({ data, selected }) => {
+    const { nodeStyles } = useAlchemistNodeStyles()
+    const style = nodeStyles[nodeType] || nodeStyles.inputMaster || {}
+    
+    const IconComponent = FileText // Default icon component
+    const displayIcon = style.icon || defaultIcon
+    
+    return (
+      <div className={`relative transform transition-all duration-300 ${selected ? 'scale-105' : 'hover:scale-102'}`}>
+        {/* Connection Handles */}
+        <Handle 
+          type="target" 
+          position={Position.Top} 
+          className={`w-4 h-4 !bg-gradient-to-r !${style.handle || 'from-blue-400 to-blue-600'} !border-2 !border-white shadow-lg`} 
+        />
+        <Handle 
+          type="source" 
+          position={Position.Right} 
+          className={`w-4 h-4 !bg-gradient-to-r !${style.handle || 'from-blue-400 to-blue-600'} !border-2 !border-white shadow-lg`} 
+        />
+        <Handle 
+          type="source" 
+          position={Position.Bottom} 
+          className={`w-4 h-4 !bg-gradient-to-r !${style.handle || 'from-blue-400 to-blue-600'} !border-2 !border-white shadow-lg`} 
+        />
+        <Handle 
+          type="target" 
+          position={Position.Left} 
+          className={`w-4 h-4 !bg-gradient-to-r !${style.handle || 'from-blue-400 to-blue-600'} !border-2 !border-white shadow-lg`} 
+        />
+        
+        {/* Node Body - Beautiful light styling like main Flow */}
+        <div className={`
+          relative bg-gradient-to-br ${style.background || 'from-blue-50 via-blue-100 to-blue-100/90'}
+          rounded-2xl shadow-xl border-2 border-dashed transition-all duration-300 min-w-[240px] max-w-[280px]
+          ${selected ? 
+            `${style.borderSelected || 'border-blue-400 shadow-blue-400/30'}` : 
+            `${style.border || 'border-blue-300'} ${style.shadow || 'shadow-blue-300/20'}`
+          }
+          ${style.borderHover || 'hover:border-blue-400'} ${style.shadowHover || 'hover:shadow-blue-400/40'}
+        `}>
+          {/* Glow Effect */}
+          <div className={`absolute inset-0 bg-gradient-to-br ${style.glow || 'from-blue-200/10'} to-transparent rounded-2xl`} />
+          
+          {/* Header Section */}
+          <div className="relative p-4 pb-3">
+            <div className="flex items-center gap-3 mb-3">
+              <div className={`p-3 bg-gradient-to-r ${style.gradient || 'from-blue-500 to-blue-700'} backdrop-blur-sm rounded-xl shadow-lg`}>
+                <span className="text-white text-xl font-bold drop-shadow-sm">{displayIcon}</span>
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-gray-800 text-lg leading-tight">
+                  {data.label || data.name || nodeType.toUpperCase()}
+                </h3>
+                <p className={`${style.text || 'text-blue-600'} text-sm font-medium`}>
+                  {data.description || 'AI-powered processing'}
+                </p>
+              </div>
+              {onDelete && (
+                <button
+                  onClick={onDelete}
+                  className="text-red-400 hover:text-red-300 transition-colors p-1 hover:bg-red-500/10 rounded-lg"
+                  title="Delete Node"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+          
+          {/* Content Section */}
+          <div className="relative px-4 pb-4">
+            <p className="text-gray-600 text-sm leading-relaxed mb-3">
+              {data.description || 'AI-enhanced content processing with dynamic capabilities'}
+            </p>
+            
+            {/* Status Indicators */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {data.aiEnabled !== false && (
+                <span className="flex items-center gap-1 px-2 py-1 bg-yellow-500/20 rounded-full text-xs text-yellow-700 font-medium">
+                  <Zap className="w-3 h-3" />
+                  AI Enhanced
+                </span>
+              )}
+              {data.features?.length > 0 && (
+                <span className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 rounded-full text-xs text-purple-700 font-medium">
+                  <Sparkles className="w-3 h-3" />
+                  {data.features.length} Features
+                </span>
+              )}
+            </div>
+          </div>
+          
+          {/* Subtle border glow */}
+          <div className={`absolute inset-0 rounded-2xl bg-gradient-to-r ${style.textLight || 'from-blue-400/30'} via-transparent ${style.textLight || 'to-blue-400/30'} opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none`} />
+        </div>
+      </div>
+    )
+  }
+}
+
+// Input Master Node with beautiful styling  
+export const InputMasterNode = createBeautifulAlchemistNode('inputMaster', '📝')
+
+// Process Master Node with beautiful styling
+export const ProcessMasterNode = createBeautifulAlchemistNode('processMaster', '⚙️')
+  const [globalSettings, setGlobalSettings] = useState({
+    aiModel: 'gpt-4o',
+    validationLevel: 'strict',
+    autoSuggestions: true,
+    syncMode: 'selective'
+  })
+  const [testInputs, setTestInputs] = useState({
+    topic: 'AI Content Creation',
+    target_audience: 'B2B',
+    tone: 'Professional',
+    style: 'Informative',
+    word_count: 1000,
+    keywords: 'AI, content, automation'
+  })
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(JSON.stringify(data))
+    toast.success('Node configuration copied!')
+  }
+
+  const handleSaveGlobal = async () => {
+    try {
+      await alchemistNodePaletteService.updateNode(data.id, { 
+        configuration: { ...data.configuration, globalSettings }
+      })
+      toast.success('Global settings saved!')
+    } catch (error) {
+      toast.error('Failed to save global settings')
+    }
+  }
+
+  const handleTestInput = () => {
+    toast.success('Test input executed!')
+  }
+
+  return (
+    <div className={`${baseNodeStyles} ${selected ? 'border-blue-400 shadow-blue-500/30' : 'border-blue-500'} group`}>
+      <Handle type="source" position={Position.Right} className="w-4 h-4 bg-blue-500 border-2 border-white" />
+      
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
+          <FileText className="w-5 h-5 text-white" />
+        </div>
+        <div className="flex-1">
+          <div className="text-white font-bold text-base">INPUT MASTER</div>
+          <div className="text-blue-400 text-sm font-medium">Data Collection</div>
+        </div>
+        <button onClick={handleCopy} className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+          <Copy className="w-4 h-4 text-gray-300" />
+        </button>
+      </div>
+
+      <div className="flex gap-2 mb-3">
+        <button
+          onClick={() => setActiveTab('global')}
+          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+            activeTab === 'global' 
+              ? 'bg-blue-600 text-white' 
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          <Globe className="w-3 h-3 inline mr-1" />
+          Global
+        </button>
+        <button
+          onClick={() => setActiveTab('test')}
+          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+            activeTab === 'test' 
+              ? 'bg-blue-600 text-white' 
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          <TestTube className="w-3 h-3 inline mr-1" />
+          Test
+        </button>
+      </div>
+
+      {activeTab === 'global' && (
+        <div className="space-y-3">
+          <div className="bg-gray-700/50 rounded-lg p-3 space-y-3">
+            <div className="text-xs text-gray-400 font-medium">Global Settings</div>
+            
+            <div>
+              <label className="text-xs text-gray-300">AI Model</label>
+              <select 
+                value={globalSettings.aiModel}
+                onChange={(e) => setGlobalSettings({...globalSettings, aiModel: e.target.value})}
+                className="w-full mt-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+              >
+                <option value="gpt-4o">GPT-4o</option>
+                <option value="gpt-4">GPT-4</option>
+                <option value="claude-3">Claude 3</option>
+                <option value="gemini-pro">Gemini Pro</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-300">Validation Level</label>
+              <select 
+                value={globalSettings.validationLevel}
+                onChange={(e) => setGlobalSettings({...globalSettings, validationLevel: e.target.value})}
+                className="w-full mt-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+              >
+                <option value="strict">Strict</option>
+                <option value="moderate">Moderate</option>
+                <option value="lenient">Lenient</option>
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-300">Auto Suggestions</span>
+              <button
+                onClick={() => setGlobalSettings({...globalSettings, autoSuggestions: !globalSettings.autoSuggestions})}
+                className={`w-8 h-4 rounded-full transition-colors ${
+                  globalSettings.autoSuggestions ? 'bg-blue-600' : 'bg-gray-600'
+                }`}
+              >
+                <div className={`w-3 h-3 bg-white rounded-full transition-transform ${
+                  globalSettings.autoSuggestions ? 'translate-x-4' : 'translate-x-0.5'
+                }`}></div>
+              </button>
+            </div>
+
+            <button 
+              onClick={handleSaveGlobal}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <Save className="w-3 h-3" />
+              Save Global Settings
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'test' && (
+        <div className="space-y-3">
+          <div className="bg-gray-700/50 rounded-lg p-3 space-y-3">
+            <div className="text-xs text-gray-400 font-medium">Test Input Data</div>
+            
+            <div>
+              <label className="text-xs text-gray-300">Topic</label>
+              <input 
+                type="text"
+                value={testInputs.topic}
+                onChange={(e) => setTestInputs({...testInputs, topic: e.target.value})}
+                className="w-full mt-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-300">Target Audience</label>
+              <select 
+                value={testInputs.target_audience}
+                onChange={(e) => setTestInputs({...testInputs, target_audience: e.target.value})}
+                className="w-full mt-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+              >
+                <option value="B2B">B2B</option>
+                <option value="B2C">B2C</option>
+                <option value="General">General</option>
+                <option value="Technical">Technical</option>
+              </select>
+            </div>
+
+            <button 
+              onClick={handleTestInput}
+              className="w-full bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <Play className="w-3 h-3" />
+              Test Input
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Process Master Node with beautiful styling
+export const ProcessMasterNode = createBeautifulAlchemistNode('processMaster', '⚙️')
+
+// Legacy Process Master Node (for reference)
+export const ProcessMasterNodeLegacy = ({ data, selected }) => {
+  const [activeTab, setActiveTab] = useState('global')
+  const [globalSettings, setGlobalSettings] = useState({
+    aiModel: 'gpt-4o',
+    processingMode: 'writing',
+    qualityLevel: 'high',
+    maxTokens: 4000
+  })
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(JSON.stringify(data))
+    toast.success('Node configuration copied!')
+  }
+
+  const handleSaveGlobal = async () => {
+    try {
+      await alchemistNodePaletteService.updateNode(data.id, { 
+        configuration: { ...data.configuration, globalSettings }
+      })
+      toast.success('Global settings saved!')
+    } catch (error) {
+      toast.error('Failed to save global settings')
+    }
+  }
+
+  return (
+    <div className={`${baseNodeStyles} ${selected ? 'border-purple-500 shadow-purple-500/30' : 'border-gray-600'} group`}>
+      <Handle type="target" position={Position.Left} className="w-4 h-4 bg-purple-500 border-2 border-white" />
+      <Handle type="source" position={Position.Right} className="w-4 h-4 bg-purple-500 border-2 border-white" />
+      
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-purple-700 rounded-xl flex items-center justify-center shadow-lg">
+            <Settings className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <div className="text-white font-bold text-lg">PROCESS MASTER</div>
+            <div className="text-purple-400 text-sm font-medium">AI Content Processing</div>
+          </div>
+        </div>
+        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={handleCopy} className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors">
+            <Copy className="w-4 h-4 text-gray-300" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setActiveTab('global')}
+          className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+            activeTab === 'global' 
+              ? 'bg-purple-600 text-white' 
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          <Globe className="w-3 h-3 inline mr-1" />
+          Global
+        </button>
+      </div>
+
+      {activeTab === 'global' && (
+        <div className="space-y-3">
+          <div className="bg-gray-700/50 rounded-lg p-3 space-y-3">
+            <div className="text-xs text-gray-400 font-medium">Global Settings</div>
+            
+            <div>
+              <label className="text-xs text-gray-300">AI Model</label>
+              <select 
+                value={globalSettings.aiModel}
+                onChange={(e) => setGlobalSettings({...globalSettings, aiModel: e.target.value})}
+                className="w-full mt-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+              >
+                <option value="gpt-4o">GPT-4o</option>
+                <option value="gpt-4">GPT-4</option>
+                <option value="claude-3">Claude 3</option>
+                <option value="gemini-pro">Gemini Pro</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-300">Processing Mode</label>
+              <select 
+                value={globalSettings.processingMode}
+                onChange={(e) => setGlobalSettings({...globalSettings, processingMode: e.target.value})}
+                className="w-full mt-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+              >
+                <option value="writing">Writing</option>
+                <option value="research">Research</option>
+                <option value="editing">Editing</option>
+                <option value="optimization">Optimization</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-300">Quality Level</label>
+              <select 
+                value={globalSettings.qualityLevel}
+                onChange={(e) => setGlobalSettings({...globalSettings, qualityLevel: e.target.value})}
+                className="w-full mt-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+              >
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="fast">Fast</option>
+              </select>
+            </div>
+
+            <button 
+              onClick={handleSaveGlobal}
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <Save className="w-3 h-3" />
+              Save Global Settings
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Condition Master Node with beautiful styling
+export const ConditionMasterNode = createBeautifulAlchemistNode('conditionMaster', '🔀')
+
+// Legacy Condition Master Node (for reference)  
+export const ConditionMasterNodeLegacy = ({ data, selected }) => {
+  const [activeTab, setActiveTab] = useState('global')
+  const [globalSettings, setGlobalSettings] = useState({
+    aiModel: 'gpt-4o',
+    logicMode: 'advanced',
+    fallbackAction: 'skip',
+    maxRetries: 3
+  })
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(JSON.stringify(data))
+    toast.success('Node configuration copied!')
+  }
+
+  const handleSaveGlobal = async () => {
+    try {
+      await alchemistNodePaletteService.updateNode(data.id, { 
+        configuration: { ...data.configuration, globalSettings }
+      })
+      toast.success('Global settings saved!')
+    } catch (error) {
+      toast.error('Failed to save global settings')
+    }
+  }
+
+  return (
+    <div className={`${baseNodeStyles} ${selected ? 'border-green-500 shadow-green-500/30' : 'border-gray-600'} group`}>
+      <Handle type="target" position={Position.Left} className="w-4 h-4 bg-green-500 border-2 border-white" />
+      <Handle type="source" position={Position.Right} className="w-4 h-4 bg-green-500 border-2 border-white" />
+      
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-green-700 rounded-xl flex items-center justify-center shadow-lg">
+            <GitBranch className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <div className="text-white font-bold text-lg">CONDITION MASTER</div>
+            <div className="text-green-400 text-sm font-medium">Logical Gates & Control</div>
+          </div>
+        </div>
+        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={handleCopy} className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors">
+            <Copy className="w-4 h-4 text-gray-300" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setActiveTab('global')}
+          className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+            activeTab === 'global' 
+              ? 'bg-green-600 text-white' 
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          <Globe className="w-3 h-3 inline mr-1" />
+          Global
+        </button>
+      </div>
+
+      {activeTab === 'global' && (
+        <div className="space-y-3">
+          <div className="bg-gray-700/50 rounded-lg p-3 space-y-3">
+            <div className="text-xs text-gray-400 font-medium">Global Settings</div>
+            
+            <div>
+              <label className="text-xs text-gray-300">AI Model</label>
+              <select 
+                value={globalSettings.aiModel}
+                onChange={(e) => setGlobalSettings({...globalSettings, aiModel: e.target.value})}
+                className="w-full mt-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+              >
+                <option value="gpt-4o">GPT-4o</option>
+                <option value="gpt-4">GPT-4</option>
+                <option value="claude-3">Claude 3</option>
+                <option value="gemini-pro">Gemini Pro</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-300">Logic Mode</label>
+              <select 
+                value={globalSettings.logicMode}
+                onChange={(e) => setGlobalSettings({...globalSettings, logicMode: e.target.value})}
+                className="w-full mt-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+              >
+                <option value="simple">Simple</option>
+                <option value="advanced">Advanced</option>
+                <option value="expert">Expert</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-300">Fallback Action</label>
+              <select 
+                value={globalSettings.fallbackAction}
+                onChange={(e) => setGlobalSettings({...globalSettings, fallbackAction: e.target.value})}
+                className="w-full mt-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+              >
+                <option value="skip">Skip</option>
+                <option value="retry">Retry</option>
+                <option value="error">Error</option>
+              </select>
+            </div>
+
+            <button 
+              onClick={handleSaveGlobal}
+              className="w-full bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <Save className="w-3 h-3" />
+              Save Global Settings
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Structural Master Node with beautiful styling  
+export const StructuralMasterNode = createBeautifulAlchemistNode('structuralMaster', '🏗️')
+
+// Legacy Structural Master Node (for reference)
+export const StructuralMasterNodeLegacy = ({ data, selected }) => {
+  const [activeTab, setActiveTab] = useState('global')
+  const [globalSettings, setGlobalSettings] = useState({
+    aiModel: 'gpt-4o',
+    structureMode: 'dynamic',
+    autoArrange: true
+  })
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(JSON.stringify(data))
+    toast.success('Node configuration copied!')
+  }
+
+  const handleSaveGlobal = async () => {
+    try {
+      await alchemistNodePaletteService.updateNode(data.id, { 
+        configuration: { ...data.configuration, globalSettings }
+      })
+      toast.success('Global settings saved!')
+    } catch (error) {
+      toast.error('Failed to save global settings')
+    }
+  }
+
+  return (
+    <div className={`${baseNodeStyles} ${selected ? 'border-orange-500 shadow-orange-500/30' : 'border-gray-600'} group`}>
+      <Handle type="target" position={Position.Left} className="w-4 h-4 bg-orange-500 border-2 border-white" />
+      <Handle type="source" position={Position.Right} className="w-4 h-4 bg-orange-500 border-2 border-white" />
+      
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-orange-700 rounded-xl flex items-center justify-center shadow-lg">
+            <Building2 className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <div className="text-white font-bold text-lg">STRUCTURAL MASTER</div>
+            <div className="text-orange-400 text-sm font-medium">Blueprint & Organization</div>
+          </div>
+        </div>
+        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={handleCopy} className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors">
+            <Copy className="w-4 h-4 text-gray-300" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setActiveTab('global')}
+          className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+            activeTab === 'global' 
+              ? 'bg-orange-600 text-white' 
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          <Globe className="w-3 h-3 inline mr-1" />
+          Global
+        </button>
+      </div>
+
+      {activeTab === 'global' && (
+        <div className="space-y-3">
+          <div className="bg-gray-700/50 rounded-lg p-3 space-y-3">
+            <div className="text-xs text-gray-400 font-medium">Global Settings</div>
+            
+            <div>
+              <label className="text-xs text-gray-300">AI Model</label>
+              <select 
+                value={globalSettings.aiModel}
+                onChange={(e) => setGlobalSettings({...globalSettings, aiModel: e.target.value})}
+                className="w-full mt-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+              >
+                <option value="gpt-4o">GPT-4o</option>
+                <option value="gpt-4">GPT-4</option>
+                <option value="claude-3">Claude 3</option>
+                <option value="gemini-pro">Gemini Pro</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-300">Structure Mode</label>
+              <select 
+                value={globalSettings.structureMode}
+                onChange={(e) => setGlobalSettings({...globalSettings, structureMode: e.target.value})}
+                className="w-full mt-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+              >
+                <option value="static">Static</option>
+                <option value="dynamic">Dynamic</option>
+                <option value="adaptive">Adaptive</option>
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-300">Auto Arrange</span>
+              <button
+                onClick={() => setGlobalSettings({...globalSettings, autoArrange: !globalSettings.autoArrange})}
+                className={`w-8 h-4 rounded-full transition-colors ${
+                  globalSettings.autoArrange ? 'bg-orange-600' : 'bg-gray-600'
+                }`}
+              >
+                <div className={`w-3 h-3 bg-white rounded-full transition-transform ${
+                  globalSettings.autoArrange ? 'translate-x-4' : 'translate-x-0.5'
+                }`}></div>
+              </button>
+            </div>
+
+            <button 
+              onClick={handleSaveGlobal}
+              className="w-full bg-orange-600 hover:bg-orange-700 text-white text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <Save className="w-3 h-3" />
+              Save Global Settings
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Output Master Node with beautiful styling
+export const OutputMasterNode = createBeautifulAlchemistNode('outputMaster', '📤')
+
+// Legacy Output Master Node (for reference)  
+export const OutputMasterNodeLegacy = ({ data, selected }) => {
+  const [activeTab, setActiveTab] = useState('global')
+  const [globalSettings, setGlobalSettings] = useState({
+    aiModel: 'gpt-4o',
+    outputMode: 'multi_format',
+    autoOptimize: true,
+    scheduling: 'immediate'
+  })
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(JSON.stringify(data))
+    toast.success('Node configuration copied!')
+  }
+
+  const handleSaveGlobal = async () => {
+    try {
+      await alchemistNodePaletteService.updateNode(data.id, { 
+        configuration: { ...data.configuration, globalSettings }
+      })
+      toast.success('Global settings saved!')
+    } catch (error) {
+      toast.error('Failed to save global settings')
+    }
+  }
+
+  return (
+    <div className={`${baseNodeStyles} ${selected ? 'border-gray-500 shadow-gray-500/30' : 'border-gray-600'} group`}>
+      <Handle type="target" position={Position.Left} className="w-4 h-4 bg-gray-500 border-2 border-white" />
+      
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-gradient-to-r from-gray-500 to-gray-700 rounded-xl flex items-center justify-center shadow-lg">
+            <Download className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <div className="text-white font-bold text-lg">OUTPUT MASTER</div>
+            <div className="text-gray-400 text-sm font-medium">Multi-Format Delivery</div>
+          </div>
+        </div>
+        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={handleCopy} className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors">
+            <Copy className="w-4 h-4 text-gray-300" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setActiveTab('global')}
+          className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+            activeTab === 'global' 
+              ? 'bg-gray-600 text-white' 
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          <Globe className="w-3 h-3 inline mr-1" />
+          Global
+        </button>
+      </div>
+
+      {activeTab === 'global' && (
+        <div className="space-y-3">
+          <div className="bg-gray-700/50 rounded-lg p-3 space-y-3">
+            <div className="text-xs text-gray-400 font-medium">Global Settings</div>
+            
+            <div>
+              <label className="text-xs text-gray-300">AI Model</label>
+              <select 
+                value={globalSettings.aiModel}
+                onChange={(e) => setGlobalSettings({...globalSettings, aiModel: e.target.value})}
+                className="w-full mt-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+              >
+                <option value="gpt-4o">GPT-4o</option>
+                <option value="gpt-4">GPT-4</option>
+                <option value="claude-3">Claude 3</option>
+                <option value="gemini-pro">Gemini Pro</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-300">Output Mode</label>
+              <select 
+                value={globalSettings.outputMode}
+                onChange={(e) => setGlobalSettings({...globalSettings, outputMode: e.target.value})}
+                className="w-full mt-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+              >
+                <option value="multi_format">Multi Format</option>
+                <option value="single_format">Single Format</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-300">Auto Optimize</span>
+              <button
+                onClick={() => setGlobalSettings({...globalSettings, autoOptimize: !globalSettings.autoOptimize})}
+                className={`w-8 h-4 rounded-full transition-colors ${
+                  globalSettings.autoOptimize ? 'bg-gray-600' : 'bg-gray-600'
+                }`}
+              >
+                <div className={`w-3 h-3 bg-white rounded-full transition-transform ${
+                  globalSettings.autoOptimize ? 'translate-x-4' : 'translate-x-0.5'
+                }`}></div>
+              </button>
+            </div>
+
+            <button 
+              onClick={handleSaveGlobal}
+              className="w-full bg-gray-600 hover:bg-gray-700 text-white text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <Save className="w-3 h-3" />
+              Save Global Settings
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+
+
+
+
+// ============================================================================
+// INPUT SUB-NODES (3 sub-nodes for Input Master)
+// ============================================================================
+
+// Input Sub-nodes with beautiful styling
+export const DataCollectorNode = createBeautifulAlchemistNode('dataCollector', '📊')
+export const FormBuilderNode = createBeautifulAlchemistNode('formBuilder', '📋') 
+export const VariableManagerNode = createBeautifulAlchemistNode('variableManager', '🔧')
+
+// ============================================================================
+// PROCESS SUB-NODES (3 sub-nodes for Process Master)
+// ============================================================================
+
+// Process Sub-nodes with beautiful styling
+export const ContentWriterNode = createBeautifulAlchemistNode('contentWriter', '✍️')
+export const ResearchEngineNode = createBeautifulAlchemistNode('researchEngine', '🔍')
+export const QualityOptimizerNode = createBeautifulAlchemistNode('qualityOptimizer', '⚡')
+
+// ============================================================================
+// CONDITION SUB-NODES (3 sub-nodes for Condition Master)
+// ============================================================================
+
+// Condition Sub-nodes with beautiful styling
+export const LogicGateNode = createBeautifulAlchemistNode('logicGate', '🚪')
+export const DecisionTreeNode = createBeautifulAlchemistNode('decisionTree', '🌳')
+export const ValidationCheckNode = createBeautifulAlchemistNode('validationCheck', '✅')
+
+// ============================================================================
+// STRUCTURAL SUB-NODES (3 sub-nodes for Structural Master)
+// ============================================================================
+
+// Structural Sub-nodes with beautiful styling
+export const BlueprintDesignerNode = createBeautifulAlchemistNode('blueprintDesigner', '📐')
+export const TemplateManagerNode = createBeautifulAlchemistNode('templateManager', '📄')
+export const LayoutEngineNode = createBeautifulAlchemistNode('layoutEngine', '🎨')
+
+// ============================================================================
+// OUTPUT SUB-NODES (3 sub-nodes for Output Master)
+// ============================================================================
+
+// Output Sub-nodes with beautiful styling
+export const MultiFormatExporterNode = createBeautifulAlchemistNode('multiFormatExporter', '📦')
+export const PreviewGeneratorNode = createBeautifulAlchemistNode('previewGenerator', '👁️')
+export const DeliveryManagerNode = createBeautifulAlchemistNode('deliveryManager', '🚚')
+
+// ===== ALCHEMIST TEMPLATE-SPECIFIC SUB-NODES =====
+
+// Content Creation Sub-nodes with beautiful styling
+export const BlogPostGeneratorNode = createBeautifulAlchemistNode('blogPostGenerator', '📝')
+export const VideoScriptWriterNode = createBeautifulAlchemistNode('videoScriptWriter', '🎬')
+export const CaseStudyWriterNode = createBeautifulAlchemistNode('caseStudyWriter', '📊')
+
+// Marketing Sub-nodes with beautiful styling
+export const EmailSequenceGeneratorNode = createBeautifulAlchemistNode('emailSequenceGenerator', '📧')
+export const SocialMediaGeneratorNode = createBeautifulAlchemistNode('socialMediaGenerator', '📱')
+export const AdCopyGeneratorNode = createBeautifulAlchemistNode('adCopyGenerator', '📢')
+
+// Sales Sub-nodes with beautiful styling
+export const SalesPageGeneratorNode = createBeautifulAlchemistNode('salesPageGenerator', '💵')
+export const LandingPageGeneratorNode = createBeautifulAlchemistNode('landingPageGenerator', '🎯')
+export const ProductDescriptionGeneratorNode = createBeautifulAlchemistNode('productDescriptionGenerator', '📎')
+
+// PR Sub-node with beautiful styling
+export const PressReleaseGeneratorNode = createBeautifulAlchemistNode('pressReleaseGenerator', '📰')
+
+// Export Master Node Types for React Flow
+export const alchemistNodeTypes = {
+  // Master Nodes
+  inputMaster: InputMasterNode,
+  processMaster: ProcessMasterNode,
+  conditionMaster: ConditionMasterNode,
+  structuralMaster: StructuralMasterNode,
+  outputMaster: OutputMasterNode,
+  
+  // Input Sub-nodes
+  dataCollector: DataCollectorNode,
+  formBuilder: FormBuilderNode,
+  variableManager: VariableManagerNode,
+  
+  // Process Sub-nodes
+  contentWriter: ContentWriterNode,
+  researchEngine: ResearchEngineNode,
+  qualityOptimizer: QualityOptimizerNode,
+  
+  // Condition Sub-nodes
+  logicGate: LogicGateNode,
+  decisionTree: DecisionTreeNode,
+  validationCheck: ValidationCheckNode,
+  
+  // Structural Sub-nodes
+  blueprintDesigner: BlueprintDesignerNode,
+  templateManager: TemplateManagerNode,
+  layoutEngine: LayoutEngineNode,
+  
+  // Output Sub-nodes
+  multiFormatExporter: MultiFormatExporterNode,
+  previewGenerator: PreviewGeneratorNode,
+  deliveryManager: DeliveryManagerNode,
+  
+  // Alchemist Template-Specific Sub-nodes
+  blogPostGenerator: BlogPostGeneratorNode,
+  videoScriptWriter: VideoScriptWriterNode,
+  caseStudyWriter: CaseStudyWriterNode,
+  emailSequenceGenerator: EmailSequenceGeneratorNode,
+  socialMediaGenerator: SocialMediaGeneratorNode,
+  adCopyGenerator: AdCopyGeneratorNode,
+  salesPageGenerator: SalesPageGeneratorNode,
+  landingPageGenerator: LandingPageGeneratorNode,
+  productDescriptionGenerator: ProductDescriptionGeneratorNode,
+  pressReleaseGenerator: PressReleaseGeneratorNode
+}
+
+export default alchemistNodeTypes

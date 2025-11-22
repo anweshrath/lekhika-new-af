@@ -1,0 +1,40 @@
+.book-reader-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at center, rgba(15, 23, 42, 0.85), rgba(9, 11, 19, 0.95));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(8px);
+}
+
+.book-reader-modal-content {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.book-reader-modal-content header {
+  padding: 1rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  /* DELETED: All color/background/border rules are now in BookReaderTheme.css */
+}
+
+.book-reader-modal-content .book-content {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 2rem;
+}

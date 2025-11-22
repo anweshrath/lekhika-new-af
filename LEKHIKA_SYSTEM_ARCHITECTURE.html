@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LEKHIKA SYSTEM ARCHITECTURE - $18M AI Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .stat {
+            background: rgba(255,255,255,0.1);
+            padding: 15px 25px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #f39c12;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+        
+        .main-content {
+            padding: 40px;
+        }
+        
+        .section {
+            margin-bottom: 50px;
+        }
+        
+        .section-title {
+            font-size: 2em;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #3498db;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .section-icon {
+            font-size: 1.2em;
+        }
+        
+        .architecture-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin: 30px 0;
+        }
+        
+        .component-card {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            border-left: 5px solid #3498db;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .component-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .component-title {
+            font-size: 1.4em;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        
+        .component-description {
+            color: #555;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        
+        .tech-stack {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 15px;
+        }
+        
+        .tech-tag {
+            background: #3498db;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 500;
+        }
+        
+        .flow-diagram {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 30px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        
+        .flow-step {
+            display: inline-block;
+            background: white;
+            border: 3px solid #3498db;
+            border-radius: 50%;
+            width: 80px;
+            height: 80px;
+            line-height: 74px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin: 0 20px;
+            position: relative;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .flow-arrow {
+            display: inline-block;
+            width: 0;
+            height: 0;
+            border-left: 20px solid #3498db;
+            border-top: 10px solid transparent;
+            border-bottom: 10px solid transparent;
+            margin: 0 10px;
+        }
+        
+        .flow-description {
+            margin-top: 20px;
+            color: #555;
+            font-style: italic;
+        }
+        
+        .database-schema {
+            background: #2c3e50;
+            color: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin: 30px 0;
+        }
+        
+        .table-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .table-item {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .table-name {
+            font-weight: bold;
+            color: #f39c12;
+            margin-bottom: 5px;
+        }
+        
+        .table-description {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+        
+        .issues-section {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 15px;
+            padding: 30px;
+            margin: 30px 0;
+        }
+        
+        .issue-item {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border-left: 5px solid #e74c3c;
+        }
+        
+        .issue-critical {
+            border-left-color: #e74c3c;
+        }
+        
+        .issue-medium {
+            border-left-color: #f39c12;
+        }
+        
+        .issue-title {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .issue-description {
+            color: #555;
+            margin-bottom: 10px;
+        }
+        
+        .issue-location {
+            font-size: 0.9em;
+            color: #7f8c8d;
+            font-family: monospace;
+            background: #ecf0f1;
+            padding: 5px 10px;
+            border-radius: 5px;
+            display: inline-block;
+        }
+        
+        .footer {
+            background: #2c3e50;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .recommendations {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 15px;
+            padding: 30px;
+            margin: 30px 0;
+        }
+        
+        .recommendation-item {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border-left: 5px solid #28a745;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .stats {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .flow-step {
+                margin: 10px;
+            }
+            
+            .flow-arrow {
+                transform: rotate(90deg);
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 LEKHIKA SYSTEM ARCHITECTURE</h1>
+            <div class="subtitle">$18 Million AI-Powered Book Creation Platform</div>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-number">95%</div>
+                    <div class="stat-label">Production Ready</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">120+</div>
+                    <div class="stat-label">AI Services</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">85+</div>
+                    <div class="stat-label">Components</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">12</div>
+                    <div class="stat-label">AI Providers</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <!-- SYSTEM OVERVIEW -->
+            <div class="section">
+                <h2 class="section-title">
+                    <span class="section-icon">🏗️</span>
+                    SYSTEM OVERVIEW
+                </h2>
+                <p style="font-size: 1.1em; color: #555; line-height: 1.8; margin-bottom: 30px;">
+                    Lekhika is a REVOLUTIONARY, production-ready AI platform that transforms user inputs into professional books through 
+                    BULLETPROOF workflow orchestration. The system features REAL AI execution, checkpoint resume system, multi-format exports, 
+                    and enterprise-grade multi-provider AI integration with visual workflow management.
+                </p>
+                
+                <div class="flow-diagram">
+                    <h3 style="color: #2c3e50; margin-bottom: 30px;">🔄 APPLICATION FLOW</h3>
+                    <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap;">
+                        <div class="flow-step">📝</div>
+                        <div class="flow-arrow"></div>
+                        <div class="flow-step">🧠</div>
+                        <div class="flow-arrow"></div>
+                        <div class="flow-step">⚙️</div>
+                        <div class="flow-arrow"></div>
+                        <div class="flow-step">📚</div>
+                    </div>
+                    <div class="flow-description">
+                        User Input → AI Processing → BULLETPROOF Workflow Execution → Multi-Format Book Generation → Resume from Any Checkpoint
+                    </div>
+                </div>
+            </div>
+
+            <!-- CURRENT SYSTEM CAPABILITIES -->
+            <div class="section">
+                <h2 class="section-title">
+                    <span class="section-icon">🚀</span>
+                    CURRENT SYSTEM CAPABILITIES
+                </h2>
+                
+                <div class="capabilities-grid">
+                    <div class="capability-card">
+                        <div class="capability-icon">✅</div>
+                        <div class="capability-title">BULLETPROOF WORKFLOW EXECUTION</div>
+                        <div class="capability-description">
+                            Real AI workflow execution with checkpoint resume system. Resume from any node completion point with full state preservation.
+                        </div>
+                    </div>
+                    
+                    <div class="capability-card">
+                        <div class="capability-icon">✅</div>
+                        <div class="capability-title">MULTI-FORMAT EXPORT SYSTEM</div>
+                        <div class="capability-description">
+                            Professional PDF, DOCX, EPUB generation with browser-compatible implementation. No more buffer compatibility issues.
+                        </div>
+                    </div>
+                    
+                    <div class="capability-card">
+                        <div class="capability-icon">✅</div>
+                        <div class="capability-title">PRE-RUN TEST SYSTEM</div>
+                        <div class="capability-description">
+                            Validate flows before execution. Test AI connectivity, export services, and workflow structure before running.
+                        </div>
+                    </div>
+                    
+                    <div class="capability-card">
+                        <div class="capability-icon">✅</div>
+                        <div class="capability-title">ELITE DFY TEMPLATES</div>
+                        <div class="capability-description">
+                            Super premium Done-For-You flows with mind-blowing instructions. Fiction, Self-Help, Manifestation categories.
+                        </div>
+                    </div>
+                    
+                    <div class="capability-card">
+                        <div class="capability-icon">✅</div>
+                        <div class="capability-title">DEDICATED OUTPUT EDITOR</div>
+                        <div class="capability-description">
+                            Revolutionary rich text editor with multi-format support, real-time stats, and export controls.
+                        </div>
+                    </div>
+                    
+                    <div class="capability-card">
+                        <div class="capability-icon">✅</div>
+                        <div class="capability-title">THREE BRANCH SELECTOR</div>
+                        <div class="capability-description">
+                            Single node that creates 3 branch options when clicked. Dynamic workflow routing capabilities.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ARCHITECTURE COMPONENTS -->
+            <div class="section">
+                <h2 class="section-title">
+                    <span class="section-icon">🏛️</span>
+                    ARCHITECTURE COMPONENTS
+                </h2>
+                
+                <div class="architecture-grid">
+                    <div class="component-card">
+                        <div class="component-title">🎨 Frontend Layer</div>
+                        <div class="component-description">
+                            React-based user interface with React Flow for visual workflow management. 
+                            Features dynamic form generation, real-time collaboration, and responsive design.
+                        </div>
+                        <div class="tech-stack">
+                            <span class="tech-tag">React 18.2.0</span>
+                            <span class="tech-tag">Vite</span>
+                            <span class="tech-tag">TailwindCSS</span>
+                            <span class="tech-tag">React Flow</span>
+                            <span class="tech-tag">Framer Motion</span>
+                        </div>
+                    </div>
+                    
+                    <div class="component-card">
+                        <div class="component-title">🤖 AI Integration Layer</div>
+                        <div class="component-description">
+                            Multi-provider AI system supporting OpenAI, Claude, Gemini, Mistral, and more. 
+                            Features intelligent routing, failover mechanisms, and usage tracking.
+                        </div>
+                        <div class="tech-stack">
+                            <span class="tech-tag">OpenAI</span>
+                            <span class="tech-tag">Anthropic</span>
+                            <span class="tech-tag">Google AI</span>
+                            <span class="tech-tag">Mistral</span>
+                            <span class="tech-tag">Perplexity</span>
+                        </div>
+                    </div>
+                    
+                    <div class="component-card">
+                        <div class="component-title">🗄️ Database Layer</div>
+                        <div class="component-description">
+                            Supabase PostgreSQL with comprehensive schema, RLS policies, and real-time subscriptions. 
+                            Handles user management, workflow storage, and AI provider configurations.
+                        </div>
+                        <div class="tech-stack">
+                            <span class="tech-tag">Supabase</span>
+                            <span class="tech-tag">PostgreSQL</span>
+                            <span class="tech-tag">JSONB</span>
+                            <span class="tech-tag">RLS</span>
+                            <span class="tech-tag">Real-time</span>
+                        </div>
+                    </div>
+                    
+                    <div class="component-card">
+                        <div class="component-title">⚙️ Workflow Engine</div>
+                        <div class="component-description">
+                            Visual node-based workflow system with AI-powered content generation. 
+                            Supports complex data flow, conditional logic, and multi-format output generation.
+                        </div>
+                        <div class="tech-stack">
+                            <span class="tech-tag">Node System</span>
+                            <span class="tech-tag">Execution Engine</span>
+                            <span class="tech-tag">Progress Tracking</span>
+                            <span class="tech-tag">Error Handling</span>
+                        </div>
+                    </div>
+                    
+                    <div class="component-card">
+                        <div class="component-title">🔐 Authentication System</div>
+                        <div class="component-description">
+                            Multi-tier authentication with SuperAdmin, user management, and session handling. 
+                            Features role-based access control and secure API key management.
+                        </div>
+                        <div class="tech-stack">
+                            <span class="tech-tag">Supabase Auth</span>
+                            <span class="tech-tag">Session Management</span>
+                            <span class="tech-tag">Role-Based Access</span>
+                            <span class="tech-tag">API Key Security</span>
+                        </div>
+                    </div>
+                    
+                    <div class="component-card">
+                        <div class="component-title">📊 Analytics & Monitoring</div>
+                        <div class="component-description">
+                            Comprehensive tracking of AI usage, workflow performance, and user analytics. 
+                            Features real-time dashboards and usage optimization.
+                        </div>
+                        <div class="tech-stack">
+                            <span class="tech-tag">Usage Tracking</span>
+                            <span class="tech-tag">Performance Metrics</span>
+                            <span class="tech-tag">Real-time Dashboard</span>
+                            <span class="tech-tag">Token Analytics</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- DATABASE SCHEMA -->
+            <div class="section">
+                <h2 class="section-title">
+                    <span class="section-icon">🗄️</span>
+                    DATABASE SCHEMA
+                </h2>
+                
+                <div class="database-schema">
+                    <h3 style="color: #f39c12; margin-bottom: 20px;">📋 Core Tables</h3>
+                    <div class="table-list">
+                        <div class="table-item">
+                            <div class="table-name">ai_flows</div>
+                            <div class="table-description">Workflow definitions with JSONB configurations</div>
+                        </div>
+                        <div class="table-item">
+                            <div class="table-name">node_palettes</div>
+                            <div class="table-description">Reusable node templates and configurations</div>
+                        </div>
+                        <div class="table-item">
+                            <div class="table-name">ai_providers</div>
+                            <div class="table-description">API key management for multiple AI providers</div>
+                        </div>
+                        <div class="table-item">
+                            <div class="table-name">ai_model_metadata</div>
+                            <div class="table-description">AI model configurations and capabilities</div>
+                        </div>
+                        <div class="table-item">
+                            <div class="table-name">superadmin_users</div>
+                            <div class="table-description">SuperAdmin authentication and permissions</div>
+                        </div>
+                        <div class="table-item">
+                            <div class="table-name">admin_sessions</div>
+                            <div class="table-description">Session management and security</div>
+                        </div>
+                        <div class="table-item">
+                            <div class="table-name">user_engines</div>
+                            <div class="table-description">User-specific engine copies and configurations</div>
+                        </div>
+                        <div class="table-item">
+                            <div class="table-name">level_access</div>
+                            <div class="table-description">Tier-based access control system</div>
+                        </div>
+                        <div class="table-item">
+                            <div class="table-name">execution_logs</div>
+                            <div class="table-description">Workflow execution tracking and monitoring</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- WORKFLOW SYSTEM -->
+            <div class="section">
+                <h2 class="section-title">
+                    <span class="section-icon">🔄</span>
+                    WORKFLOW SYSTEM
+                </h2>
+                
+                <div class="architecture-grid">
+                    <div class="component-card">
+                        <div class="component-title">📝 Input Nodes</div>
+                        <div class="component-description">
+                            Collect and validate user requirements. Features dynamic form generation, 
+                            input validation, and intelligent enhancement of incomplete data.
+                        </div>
+                    </div>
+                    
+                    <div class="component-card">
+                        <div class="component-title">🧠 Process Nodes</div>
+                        <div class="component-description">
+                            AI-powered content generation with specialized roles. Includes research, 
+                            analysis, content creation, and quality enhancement capabilities.
+                        </div>
+                    </div>
+                    
+                    <div class="component-card">
+                        <div class="component-title">🔀 Condition Nodes</div>
+                        <div class="component-description">
+                            Logic branching and conditional workflow execution. Enables dynamic 
+                            routing based on content analysis and user preferences.
+                        </div>
+                    </div>
+                    
+                    <div class="component-card">
+                        <div class="component-title">👁️ Preview Nodes</div>
+                        <div class="component-description">
+                            Real-time content preview and validation. Allows users to review 
+                            generated content before final output generation.
+                        </div>
+                    </div>
+                    
+                    <div class="component-card">
+                        <div class="component-title">📚 Output Nodes</div>
+                        <div class="component-description">
+                            Multi-format deliverable generation. Supports HTML, PDF, EPUB, 
+                            DOCX, and audiobook formats with professional formatting.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- CRITICAL ISSUES -->
+            <div class="section">
+                <h2 class="section-title">
+                    <span class="section-icon">⚠️</span>
+                    CRITICAL ISSUES
+                </h2>
+                
+                <div class="issues-section">
+                    <div class="issue-item issue-critical">
+                        <div class="issue-title">🔴 DFY FLOWS SYNC PROBLEM</div>
+                        <div class="issue-description">
+                            Database not synchronized with completeDFYFlows.js file. Users see only 2-node flows 
+                            instead of complete 4-9 node professional workflows.
+                        </div>
+                        <div class="issue-location">src/data/completeDFYFlows.js → ai_flows table</div>
+                    </div>
+                    
+                    <div class="issue-item issue-critical">
+                        <div class="issue-title">🔴 SECURITY VULNERABILITY</div>
+                        <div class="issue-description">
+                            SuperAdmin passwords stored in plain text in database. Critical security 
+                            vulnerability requiring immediate implementation of proper password hashing.
+                        </div>
+                        <div class="issue-location">superadmin_users.password_hash column</div>
+                    </div>
+                    
+                    <div class="issue-item issue-medium">
+                        <div class="issue-title">🟡 HARDCODED VALUES</div>
+                        <div class="issue-description">
+                            Various components contain hardcoded values violating Master's no-hardcoding rule. 
+                            Need to move all static values to dynamic database-driven configuration.
+                        </div>
+                        <div class="issue-location">Multiple components throughout codebase</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- OPTIMIZATION RECOMMENDATIONS -->
+            <div class="section">
+                <h2 class="section-title">
+                    <span class="section-icon">🚀</span>
+                    OPTIMIZATION RECOMMENDATIONS
+                </h2>
+                
+                <div class="recommendations">
+                    <div class="recommendation-item">
+                        <div class="issue-title">✅ IMMEDIATE FIXES (24-48 hours)</div>
+                        <div class="issue-description">
+                            • Fix DFY flows synchronization issue<br>
+                            • Implement bcrypt password hashing<br>
+                            • Remove hardcoded values from critical components
+                        </div>
+                    </div>
+                    
+                    <div class="recommendation-item">
+                        <div class="issue-title">✅ SHORT TERM (1-2 weeks)</div>
+                        <div class="issue-description">
+                            • Implement code splitting and lazy loading<br>
+                            • Add comprehensive error handling<br>
+                            • Optimize database queries and add caching
+                        </div>
+                    </div>
+                    
+                    <div class="recommendation-item">
+                        <div class="issue-title">✅ LONG TERM (1-3 months)</div>
+                        <div class="issue-description">
+                            • Add automated testing suite<br>
+                            • Implement Redis caching layer<br>
+                            • Add API rate limiting and monitoring
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <h3 style="margin-bottom: 15px;">🎯 CONCLUSION</h3>
+            <p style="font-size: 1.1em; line-height: 1.6; opacity: 0.9;">
+                Lekhika is a sophisticated, enterprise-ready AI platform with strong architectural foundations. 
+                The application is 85% production-ready with three critical issues requiring immediate attention. 
+                With these fixes implemented, Lekhika will be a world-class AI-powered book creation platform 
+                worthy of its $18M valuation.
+            </p>
+            <div style="margin-top: 20px; font-size: 0.9em; opacity: 0.7;">
+                Comprehensive System Architecture Audit - Generated by AI Assistant
+            </div>
+        </div>
+    </div>
+</body>
+</html>

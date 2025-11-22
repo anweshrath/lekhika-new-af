@@ -1,0 +1,8 @@
+# Archive directories
+archived_context/
+chat_exports/
+
+# Large backup files
+*.sql.backup
+*.js.backup
+*.js.bak

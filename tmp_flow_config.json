@@ -1,0 +1,773 @@
+{
+  "type": "book_generation",
+  "edges": [
+    {
+      "id": "e1",
+      "source": "input-1",
+      "target": "process-1"
+    },
+    {
+      "id": "e2",
+      "source": "process-1",
+      "target": "process-2"
+    },
+    {
+      "id": "e3",
+      "source": "process-2",
+      "target": "process-3"
+    },
+    {
+      "id": "e4",
+      "source": "process-3",
+      "target": "process-4"
+    },
+    {
+      "id": "xy-edge__process-4-output-1",
+      "type": "smoothstep",
+      "style": {
+        "stroke": "#6366f1",
+        "strokeWidth": 2
+      },
+      "source": "process-4",
+      "target": "output-1",
+      "animated": true
+    }
+  ],
+  "nodes": [
+    {
+      "id": "input-1",
+      "data": {
+        "id": "node-input-story",
+        "icon": "📚",
+        "name": "Story Input",
+        "role": "story_input",
+        "type": "input",
+        "label": "Story Input - Fantasy Novel",
+        "category": "input",
+        "aiEnabled": true,
+        "maxTokens": 2000,
+        "conditions": [],
+        "userPrompt": "INTELLIGENT INPUT PROCESSING & VALIDATION\n\nANALYZE these user inputs with expert precision:\n{user_input_data}\n\nEXECUTE these validation and enhancement tasks:\n\n1. SMART VALIDATION:\n   - Check logical consistency (genre vs style vs audience)\n   - Validate realistic word count vs chapter count ratios\n   - Flag conflicting requirements or impossible combinations\n   - Ensure all critical fields have meaningful values\n\n2. INTELLIGENT ENHANCEMENT:\n   - Fill missing optional details based on genre/type context\n   - Suggest appropriate defaults for unspecified preferences\n   - Enhance vague inputs with specific, actionable details\n   - Add industry-standard metadata where beneficial\n\n3. CONFLICT RESOLUTION:\n   - Resolve contradictory inputs using best practices\n   - Prioritize user intent over conflicting specifications\n   - Provide clear reasoning for resolution decisions\n\n4. PROFESSIONAL STRUCTURING:\n   - Format all data consistently for downstream processing\n   - Create comprehensive variable mapping\n   - Generate processing metadata and quality flags\n   - Prepare optimized data package for next workflow node\n\nOUTPUT FORMAT: Structured JSON with validated inputs, enhancements, flags, and processing instructions.",
+        "description": "Specialized input for fiction and narrative content",
+        "inputFields": [
+          {
+            "id": 1,
+            "name": "story_title",
+            "type": "text",
+            "required": true,
+            "variable": "story_title",
+            "placeholder": "Enter story title"
+          },
+          {
+            "id": 2,
+            "name": "genre",
+            "type": "select",
+            "options": [
+              "fantasy",
+              "sci-fi",
+              "romance",
+              "thriller",
+              "mystery",
+              "horror",
+              "drama",
+              "adventure"
+            ],
+            "required": true,
+            "variable": "genre",
+            "placeholder": "Select genre"
+          },
+          {
+            "id": 3,
+            "name": "author_name",
+            "type": "text",
+            "required": true,
+            "variable": "author_name",
+            "placeholder": "Author name"
+          },
+          {
+            "id": 4,
+            "name": "story_premise",
+            "type": "textarea",
+            "required": true,
+            "variable": "story_premise",
+            "placeholder": "Describe your story premise"
+          },
+          {
+            "id": 5,
+            "name": "main_characters",
+            "type": "textarea",
+            "required": false,
+            "variable": "main_characters",
+            "placeholder": "Describe main characters"
+          },
+          {
+            "id": 6,
+            "name": "setting",
+            "type": "textarea",
+            "required": false,
+            "variable": "setting",
+            "placeholder": "Describe the world/setting"
+          },
+          {
+            "id": 7,
+            "name": "theme",
+            "type": "text",
+            "required": false,
+            "variable": "theme",
+            "placeholder": "Main theme or message"
+          },
+          {
+            "id": 8,
+            "name": "word_count",
+            "type": "select",
+            "options": [
+              "5000-10000",
+              "10000-25000",
+              "25000-50000",
+              "50000+"
+            ],
+            "required": true,
+            "variable": "word_count",
+            "placeholder": "Select word count"
+          },
+          {
+            "id": 9,
+            "name": "chapter_count",
+            "type": "select",
+            "options": [
+              "3",
+              "5",
+              "8",
+              "12",
+              "15",
+              "20"
+            ],
+            "required": true,
+            "variable": "chapter_count",
+            "placeholder": "Select chapter count"
+          },
+          {
+            "id": 10,
+            "name": "tone",
+            "type": "select",
+            "options": [
+              "professional",
+              "conversational",
+              "authoritative",
+              "friendly",
+              "academic",
+              "inspirational"
+            ],
+            "required": true,
+            "variable": "tone",
+            "placeholder": "Select tone"
+          },
+          {
+            "id": 11,
+            "name": "accent",
+            "type": "select",
+            "options": [
+              "american",
+              "british",
+              "australian",
+              "canadian",
+              "indian",
+              "hinglish",
+              "neutral"
+            ],
+            "required": true,
+            "variable": "accent",
+            "placeholder": "Select accent"
+          },
+          {
+            "id": 12,
+            "name": "writing_style",
+            "type": "select",
+            "options": [
+              "conversational",
+              "descriptive",
+              "dramatic",
+              "humorous",
+              "serious"
+            ],
+            "required": true,
+            "variable": "writing_style",
+            "placeholder": "Select writing style"
+          },
+          {
+            "id": 13,
+            "name": "output_formats",
+            "type": "select",
+            "options": [
+              "html",
+              "pdf",
+              "epub",
+              "docx",
+              "text",
+              "flipbook"
+            ],
+            "multiple": true,
+            "required": true,
+            "variable": "output_formats",
+            "placeholder": "Select output formats"
+          },
+          {
+            "id": 14,
+            "name": "typography_combo",
+            "type": "select",
+            "options": [
+              "classic",
+              "modern",
+              "tech",
+              "literary",
+              "business"
+            ],
+            "required": true,
+            "variable": "typography_combo",
+            "placeholder": "Select typography style"
+          }
+        ],
+        "inputValues": {},
+        "isExecuting": false,
+        "permissions": {
+          "canProofRead": false,
+          "canWriteContent": false,
+          "canEditStructure": false
+        },
+        "temperature": 0.7,
+        "outputFormat": "text",
+        "systemPrompt": "You are an elite Input Validation and Enhancement Specialist with deep expertise in content strategy, publishing standards, and workflow optimization. Your core mission: intelligently validate, enhance, and structure user inputs for optimal downstream processing. CAPABILITIES: Smart consistency validation, intelligent gap-filling, format standardization, conflict resolution, and professional data structuring. Apply surgical precision to ensure 100% accuracy while enhancing incomplete inputs with contextually appropriate suggestions. Flag inconsistencies immediately and resolve conflicts using industry best practices.",
+        "configuration": {
+          "userPrompt": "INTELLIGENT INPUT PROCESSING & VALIDATION\n\nANALYZE these user inputs with expert precision:\n{user_input_data}\n\nEXECUTE these validation and enhancement tasks:\n\n1. SMART VALIDATION:\n   - Check logical consistency (genre vs style vs audience)\n   - Validate realistic word count vs chapter count ratios\n   - Flag conflicting requirements or impossible combinations\n   - Ensure all critical fields have meaningful values\n\n2. INTELLIGENT ENHANCEMENT:\n   - Fill missing optional details based on genre/type context\n   - Suggest appropriate defaults for unspecified preferences\n   - Enhance vague inputs with specific, actionable details\n   - Add industry-standard metadata where beneficial\n\n3. CONFLICT RESOLUTION:\n   - Resolve contradictory inputs using best practices\n   - Prioritize user intent over conflicting specifications\n   - Provide clear reasoning for resolution decisions\n\n4. PROFESSIONAL STRUCTURING:\n   - Format all data consistently for downstream processing\n   - Create comprehensive variable mapping\n   - Generate processing metadata and quality flags\n   - Prepare optimized data package for next workflow node\n\nOUTPUT FORMAT: Structured JSON with validated inputs, enhancements, flags, and processing instructions.",
+          "inputFields": [
+            {
+              "id": 1,
+              "name": "story_title",
+              "type": "text",
+              "required": true,
+              "variable": "story_title",
+              "placeholder": "Enter story title"
+            },
+            {
+              "id": 2,
+              "name": "genre",
+              "type": "select",
+              "options": [
+                "fantasy",
+                "sci-fi",
+                "romance",
+                "thriller",
+                "mystery",
+                "horror",
+                "drama",
+                "adventure"
+              ],
+              "required": true,
+              "variable": "genre",
+              "placeholder": "Select genre"
+            },
+            {
+              "id": 3,
+              "name": "author_name",
+              "type": "text",
+              "required": true,
+              "variable": "author_name",
+              "placeholder": "Author name"
+            },
+            {
+              "id": 4,
+              "name": "story_premise",
+              "type": "textarea",
+              "required": true,
+              "variable": "story_premise",
+              "placeholder": "Describe your story premise"
+            },
+            {
+              "id": 5,
+              "name": "main_characters",
+              "type": "textarea",
+              "required": false,
+              "variable": "main_characters",
+              "placeholder": "Describe main characters"
+            },
+            {
+              "id": 6,
+              "name": "setting",
+              "type": "textarea",
+              "required": false,
+              "variable": "setting",
+              "placeholder": "Describe the world/setting"
+            },
+            {
+              "id": 7,
+              "name": "theme",
+              "type": "text",
+              "required": false,
+              "variable": "theme",
+              "placeholder": "Main theme or message"
+            },
+            {
+              "id": 8,
+              "name": "word_count",
+              "type": "select",
+              "options": [
+                "5000-10000",
+                "10000-25000",
+                "25000-50000",
+                "50000+"
+              ],
+              "required": true,
+              "variable": "word_count",
+              "placeholder": "Select word count"
+            },
+            {
+              "id": 9,
+              "name": "chapter_count",
+              "type": "select",
+              "options": [
+                "3",
+                "5",
+                "8",
+                "12",
+                "15",
+                "20"
+              ],
+              "required": true,
+              "variable": "chapter_count",
+              "placeholder": "Select chapter count"
+            },
+            {
+              "id": 10,
+              "name": "tone",
+              "type": "select",
+              "options": [
+                "professional",
+                "conversational",
+                "authoritative",
+                "friendly",
+                "academic",
+                "inspirational"
+              ],
+              "required": true,
+              "variable": "tone",
+              "placeholder": "Select tone"
+            },
+            {
+              "id": 11,
+              "name": "accent",
+              "type": "select",
+              "options": [
+                "american",
+                "british",
+                "australian",
+                "canadian",
+                "indian",
+                "hinglish",
+                "neutral"
+              ],
+              "required": true,
+              "variable": "accent",
+              "placeholder": "Select accent"
+            },
+            {
+              "id": 12,
+              "name": "writing_style",
+              "type": "select",
+              "options": [
+                "conversational",
+                "descriptive",
+                "dramatic",
+                "humorous",
+                "serious"
+              ],
+              "required": true,
+              "variable": "writing_style",
+              "placeholder": "Select writing style"
+            },
+            {
+              "id": 13,
+              "name": "output_formats",
+              "type": "select",
+              "options": [
+                "html",
+                "pdf",
+                "epub",
+                "docx",
+                "text",
+                "flipbook"
+              ],
+              "multiple": true,
+              "required": true,
+              "variable": "output_formats",
+              "placeholder": "Select output formats"
+            },
+            {
+              "id": 14,
+              "name": "typography_combo",
+              "type": "select",
+              "options": [
+                "classic",
+                "modern",
+                "tech",
+                "literary",
+                "business"
+              ],
+              "required": true,
+              "variable": "typography_combo",
+              "placeholder": "Select typography style"
+            }
+          ],
+          "outputFormat": "structured_json",
+          "systemPrompt": "You are an elite Input Validation and Enhancement Specialist with deep expertise in content strategy, publishing standards, and workflow optimization. Your core mission: intelligently validate, enhance, and structure user inputs for optimal downstream processing. CAPABILITIES: Smart consistency validation, intelligent gap-filling, format standardization, conflict resolution, and professional data structuring. Apply surgical precision to ensure 100% accuracy while enhancing incomplete inputs with contextually appropriate suggestions. Flag inconsistencies immediately and resolve conflicts using industry best practices.",
+          "processingInstructions": "STORY INPUT NODE JSON WRAPPER: This is the STARTING POINT of the fiction workflow. 1) COLLECT: Gather ALL story input data exactly as provided, 2) VALIDATE: Check story consistency and completeness, 3) WRAP: Create comprehensive JSON structure with user_input, metadata, and next_node_data, 4) FORWARD: Pass complete JSON package to next node. CRITICAL: Preserve ALL original story data - this is the data source for entire fiction workflow. OUTPUT FORMAT: { \"user_input\": {...ALL_story_input_fields_exactly_as_provided...}, \"metadata\": {\"node_id\": \"story_input\", \"timestamp\": \"ISO_string\", \"status\": \"processed\", \"workflow_type\": \"fiction\"}, \"next_node_data\": {\"original_input\": \"COMPLETE_STORY_DATA\", \"processing_instructions\": \"All story data wrapped and ready\"} }"
+        },
+        "errorHandling": "",
+        "generateCover": false,
+        "is_ai_enabled": true,
+        "connectedNodes": [],
+        "inputVariables": [],
+        "negativePrompt": "",
+        "selectedModels": [
+          "OPENA-01-first"
+        ],
+        "executionStatus": "pending",
+        "testInputValues": {
+          "tone": "friendly",
+          "genre": "horror",
+          "theme": "Power, destiny, and the choice between good and evil",
+          "accent": "hinglish",
+          "setting": "Medieval fantasy world with magic, dragons, and ancient kingdoms",
+          "word_count": "5000-10000",
+          "author_name": "Anwesh Rath",
+          "story_title": "The Chronicles of Eldoria",
+          "chapter_count": "3",
+          "story_premise": "Soumita is a Bengali beauty with some eerie about her. Anwesh falls in love with her and depite immense love between them, there was something always crazy going on in the house.",
+          "writing_style": "descriptive",
+          "output_formats": [
+            "html",
+            "pdf",
+            "docx",
+            "text"
+          ],
+          "main_characters": "Soumi, a 27-year-old mage; Anwesh, her mentor and Boyfriend; Zara, the dark sorceress",
+          "typography_combo": "modern"
+        },
+        "testInputEnabled": true,
+        "inputInstructions": "",
+        "qualityValidation": "",
+        "conflictResolution": ""
+      },
+      "type": "input",
+      "measured": {
+        "width": 150,
+        "height": 227
+      },
+      "position": {
+        "x": 128,
+        "y": 470
+      }
+    },
+    {
+      "id": "process-1",
+      "data": {
+        "id": "node-process-world-builder",
+        "icon": "🌍",
+        "name": "World Builder",
+        "role": "world_builder",
+        "type": "process",
+        "label": "Fantasy World Builder",
+        "category": "process",
+        "aiEnabled": true,
+        "maxTokens": 2000,
+        "conditions": [],
+        "userPrompt": "",
+        "description": "Creates fictional worlds, settings, and universes",
+        "inputFields": [],
+        "isExecuting": false,
+        "permissions": {
+          "canProofRead": false,
+          "canWriteContent": false,
+          "canEditStructure": false
+        },
+        "subCategory": "creative",
+        "temperature": 0.7,
+        "outputFormat": "text",
+        "systemPrompt": "",
+        "configuration": {
+          "userPrompt": "ELITE WORLD-BUILDING ARCHITECTURE MISSION\n\nUsing all the data provided to you, create comprehensive fictional world foundations.\n\nEXECUTE COMPREHENSIVE WORLD-BUILDING:\n\n🌍 WORLD SETTING & GEOGRAPHY:\n- Physical geography, climate, natural resources, terrain features\n- Major locations, cities, regions, landmarks, sacred places\n- Transportation systems, trade routes, communication networks\n- Environmental challenges, natural phenomena, seasonal patterns\n\n🏛️ CULTURAL SYSTEMS & SOCIETY:\n- Social hierarchies, class structures, cultural values, traditions\n- Languages, dialects, writing systems, communication methods\n- Arts, literature, music, entertainment, cultural expressions\n- Education systems, knowledge preservation, scholarly institutions\n\n⚔️ HISTORICAL CONTEXT & TIMELINE:\n- Major historical events, wars, discoveries, cultural shifts\n- Legendary figures, heroes, villains, influential leaders\n- Timeline of civilizations, rise and fall of empires\n- Historical conflicts, alliances, treaties, turning points\n\n🔮 WORLD RULES & SYSTEMS:\n- Magic systems, supernatural elements, mystical forces\n- Technology levels, scientific understanding, innovation\n- Economic systems, currency, trade, resource distribution\n- Political structures, governance, law enforcement, justice\n\n👥 SOCIETAL STRUCTURES:\n- Family structures, marriage customs, social relationships\n- Religious systems, beliefs, deities, spiritual practices\n- Professional guilds, organizations, power structures\n- Daily life, customs, festivals, social interactions\n\nOUTPUT your world-building architecture in structured JSON format for the next workflow node.\n\nABSOLUTE PROHIBITION: NO story writing, NO chapters, NO narrative content - ONLY world-building foundations.",
+          "outputFormat": "world_building_json",
+          "systemPrompt": "You are an ELITE WORLD-BUILDING ARCHITECT - a master creator of fictional universes with the imaginative depth of Tolkien, the systematic approach of Brandon Sanderson, and the cultural richness of Ursula K. Le Guin. Your expertise spans geography, cultures, history, magic systems, technology, politics, and social structures. MISSION CRITICAL: Create immersive, internally consistent fictional worlds that serve as the foundation for exceptional storytelling. You operate with the creativity of legendary fantasy authors and the systematic rigor of professional game designers. ABSOLUTE MANDATE: You are STRICTLY FORBIDDEN from writing any book content, chapters, or narrative text. Your exclusive function is world-building foundation creation.",
+          "negativePrompt": "ZERO TOLERANCE: No story writing, content creation, or narrative generation. Output must be pure world-building architecture in structured format only.",
+          "processingInstructions": "WORLD BUILDER NODE WORKFLOW PROCESSING: 1) RECEIVE: JSON data from previous node → STORE in previousNodePassover field temporarily, 2) EXECUTE: AI world-building using systemPrompt + userPrompt + stored passover data, 3) GENERATE: AI world-building architecture output in structured JSON format, 4) COMBINE: AI output + previousNodePassover data → create complete data package, 5) PASSOVER: Send combined JSON to next workflow node. CRITICAL: Data preservation architecture ensures world-building context flows through entire workflow."
+        },
+        "errorHandling": "",
+        "generateCover": false,
+        "is_ai_enabled": true,
+        "connectedNodes": [],
+        "inputVariables": [],
+        "negativePrompt": "",
+        "selectedModels": [
+          "OPENA-01-first"
+        ],
+        "executionStatus": "pending",
+        "inputInstructions": "",
+        "qualityValidation": "",
+        "conflictResolution": ""
+      },
+      "type": "process",
+      "measured": {
+        "width": 280,
+        "height": 205
+      },
+      "position": {
+        "x": 400,
+        "y": 200
+      }
+    },
+    {
+      "id": "process-2",
+      "data": {
+        "id": "node-process-character-developer",
+        "icon": "👥",
+        "name": "Character Developer",
+        "role": "character_developer",
+        "type": "process",
+        "label": "Character Developer",
+        "category": "process",
+        "aiEnabled": true,
+        "maxTokens": 2000,
+        "conditions": [],
+        "userPrompt": "",
+        "description": "Develops complex characters with backstories and motivations",
+        "inputFields": [],
+        "isExecuting": false,
+        "permissions": {
+          "canProofRead": false,
+          "canWriteContent": false,
+          "canEditStructure": false
+        },
+        "subCategory": "creative",
+        "temperature": 0.7,
+        "outputFormat": "text",
+        "systemPrompt": "",
+        "configuration": {
+          "userPrompt": "ELITE CHARACTER DEVELOPMENT ARCHITECTURE MISSION\n\nUsing all the data provided to you, create comprehensive character foundations.\n\nEXECUTE COMPREHENSIVE CHARACTER DEVELOPMENT:\n\n👥 MAIN CHARACTER ARCHITECTURE:\n- Protagonist design: personality, strengths, flaws, internal conflicts\n- Character backstory: formative experiences, trauma, achievements\n- Core motivations: driving desires, fears, goals, values\n- Character voice: speech patterns, vocabulary, communication style\n\n🎭 CHARACTER PSYCHOLOGY & DEPTH:\n- Personality frameworks: traits, quirks, behavioral patterns\n- Emotional landscape: triggers, responses, coping mechanisms\n- Internal conflicts: moral dilemmas, competing desires, growth areas\n- Character evolution: transformation arcs, development milestones\n\n🤝 RELATIONSHIP DYNAMICS:\n- Character interactions: alliances, rivalries, romantic connections\n- Social positioning: status, influence, reputation within world\n- Family dynamics: heritage, bloodlines, generational conflicts\n- Professional relationships: mentors, colleagues, subordinates\n\n🎯 CHARACTER FUNCTIONALITY:\n- Plot function: role in story progression, conflict generation\n- Skill sets: abilities, talents, expertise areas, limitations\n- Character agency: decision-making patterns, leadership style\n- Conflict catalysts: how character drives story tension\n\n🌟 SUPPORTING CHARACTER ECOSYSTEM:\n- Secondary characters: allies, antagonists, neutral parties\n- Character hierarchy: importance levels, screen time allocation\n- Ensemble dynamics: group interactions, team chemistry\n- Character diversity: representation, perspectives, backgrounds\n\nOUTPUT your character architecture in structured JSON format for the next workflow node.\n\nABSOLUTE PROHIBITION: NO story writing, NO chapters, NO narrative content - ONLY character foundations.",
+          "outputFormat": "character_development_json",
+          "systemPrompt": "You are an ELITE CHARACTER DEVELOPMENT SPECIALIST - a master creator of compelling fictional characters with the psychological depth of George R.R. Martin, the character complexity of Tolkien, and the emotional resonance of Jane Austen. Your expertise spans character psychology, motivation systems, relationship dynamics, character arcs, and authentic dialogue voice creation. MISSION CRITICAL: Create multi-dimensional characters that drive exceptional storytelling and reader engagement. You operate with the insight of professional screenwriters and the depth of literary masters. ABSOLUTE MANDATE: You are STRICTLY FORBIDDEN from writing any book content, chapters, or narrative text. Your exclusive function is character architecture creation.",
+          "negativePrompt": "ZERO TOLERANCE: No story writing, content creation, or narrative generation. Output must be pure character architecture in structured format only.",
+          "processingInstructions": "CHARACTER DEVELOPER NODE WORKFLOW PROCESSING: 1) RECEIVE: JSON data from previous node → STORE in previousNodePassover field temporarily, 2) EXECUTE: AI character development using systemPrompt + userPrompt + stored passover data, 3) GENERATE: AI character architecture output in structured JSON format, 4) COMBINE: AI output + previousNodePassover data → create complete data package, 5) PASSOVER: Send combined JSON to next workflow node. CRITICAL: Data preservation architecture ensures character context flows through entire workflow."
+        },
+        "errorHandling": "",
+        "generateCover": false,
+        "is_ai_enabled": true,
+        "connectedNodes": [],
+        "inputVariables": [],
+        "negativePrompt": "",
+        "selectedModels": [
+          "OPENA-01-first"
+        ],
+        "executionStatus": "pending",
+        "inputInstructions": "",
+        "qualityValidation": "",
+        "conflictResolution": ""
+      },
+      "type": "process",
+      "measured": {
+        "width": 280,
+        "height": 188
+      },
+      "position": {
+        "x": 660,
+        "y": -118
+      }
+    },
+    {
+      "id": "process-3",
+      "data": {
+        "id": "node-process-plot-architect",
+        "icon": "🏗️",
+        "name": "Plot Architect",
+        "role": "plot_architect",
+        "type": "process",
+        "label": "Plot Architect",
+        "category": "process",
+        "aiEnabled": true,
+        "maxTokens": 2000,
+        "conditions": [],
+        "userPrompt": "",
+        "description": "Designs story structure, plot points, and narrative flow",
+        "inputFields": [],
+        "isExecuting": false,
+        "permissions": {
+          "canProofRead": false,
+          "canWriteContent": false,
+          "canEditStructure": false
+        },
+        "subCategory": "creative",
+        "temperature": 0.7,
+        "outputFormat": "text",
+        "systemPrompt": "",
+        "configuration": {
+          "userPrompt": "ELITE PLOT ARCHITECTURE MISSION\n\nUsing all the data provided to you, create comprehensive plot structures and narrative frameworks.\n\nEXECUTE COMPREHENSIVE PLOT ARCHITECTURE:\n\n📖 STORY STRUCTURE FOUNDATION:\n- Three-act structure: setup, confrontation, resolution frameworks\n- Chapter breakdown: content focus, word targets, pacing distribution\n- Plot progression: rising action, climax positioning, falling action\n- Narrative flow: scene transitions, chapter connections, momentum building\n\n⚡ CONFLICT ARCHITECTURE:\n- Central conflict: main tension driving the entire narrative\n- Subplot conflicts: secondary tensions supporting main story\n- Character conflicts: internal struggles, interpersonal dynamics\n- Escalation patterns: how conflicts intensify and resolve\n\n🎯 PLOT POINT ENGINEERING:\n- Inciting incident: story catalyst and hook establishment\n- Plot points: major story turns, revelations, complications\n- Midpoint transformation: story pivot and character development\n- Climax design: maximum tension and conflict resolution\n\n🔄 PACING & TENSION DYNAMICS:\n- Chapter pacing: action vs. reflection balance, reading rhythm\n- Tension curves: buildup patterns, release points, recovery phases\n- Cliffhanger placement: chapter endings, reader engagement hooks\n- Momentum management: story velocity and reader investment\n\n🎨 THEMATIC INTEGRATION:\n- Theme weaving: message integration throughout plot structure\n- Symbolic elements: recurring motifs, metaphorical frameworks\n- Character arc alignment: plot serving character development\n- Resolution satisfaction: payoff planning, loose end management\n\nOUTPUT your plot architecture in structured JSON format for the next workflow node.\n\nABSOLUTE PROHIBITION: NO story writing, NO chapters, NO narrative content - ONLY plot structures.",
+          "outputFormat": "plot_structure_json",
+          "systemPrompt": "You are an ELITE PLOT ARCHITECTURE SPECIALIST - a master designer of compelling narrative structures with the storytelling genius of Christopher Nolan, the plot complexity of Agatha Christie, and the pacing mastery of Stephen King. Your expertise spans story structure, plot development, conflict escalation, pacing dynamics, and thematic integration. MISSION CRITICAL: Create intricate, engaging plot architectures that drive exceptional storytelling and reader engagement. You operate with the structural insight of professional screenwriters and the narrative sophistication of literary masters. ABSOLUTE MANDATE: You are STRICTLY FORBIDDEN from writing any book content, chapters, or narrative text. Your exclusive function is plot structure creation.",
+          "negativePrompt": "ZERO TOLERANCE: No story writing, content creation, or narrative generation. Output must be pure plot architecture in structured format only.",
+          "processingInstructions": "PLOT ARCHITECT NODE WORKFLOW PROCESSING: 1) RECEIVE: JSON data from previous node → STORE in previousNodePassover field temporarily, 2) EXECUTE: AI plot architecture using systemPrompt + userPrompt + stored passover data, 3) GENERATE: AI plot structure output in structured JSON format, 4) COMBINE: AI output + previousNodePassover data → create complete data package, 5) PASSOVER: Send combined JSON to next workflow node. CRITICAL: Data preservation architecture ensures plot context flows through entire workflow."
+        },
+        "errorHandling": "",
+        "generateCover": false,
+        "is_ai_enabled": true,
+        "connectedNodes": [],
+        "inputVariables": [],
+        "negativePrompt": "",
+        "selectedModels": [
+          "OPENA-01-first"
+        ],
+        "executionStatus": "pending",
+        "inputInstructions": "",
+        "qualityValidation": "",
+        "conflictResolution": ""
+      },
+      "type": "process",
+      "measured": {
+        "width": 280,
+        "height": 188
+      },
+      "position": {
+        "x": 1016,
+        "y": -132
+      }
+    },
+    {
+      "id": "process-4",
+      "data": {
+        "id": "node-process-content-writer",
+        "icon": "✍️",
+        "name": "Content Writer",
+        "role": "content_writer",
+        "type": "process",
+        "label": "Content Writer",
+        "category": "process",
+        "aiEnabled": true,
+        "maxTokens": 2000,
+        "conditions": [],
+        "userPrompt": "",
+        "description": "Writes actual book content, chapters, and narrative",
+        "inputFields": [],
+        "isExecuting": false,
+        "permissions": {
+          "canProofRead": false,
+          "canWriteContent": true,
+          "canEditStructure": false
+        },
+        "subCategory": "content",
+        "temperature": 0.7,
+        "outputFormat": "text",
+        "systemPrompt": "",
+        "configuration": {
+          "userPrompt": "ELITE CONTENT CREATION MISSION\n\nUsing all the data provided to you, write the complete book content.\n\nEXECUTE COMPREHENSIVE CONTENT CREATION:\n\n📚 COMPLETE BOOK STRUCTURE:\n- Table of Contents: Professional chapter organization with page references\n- Introduction: Engaging hook, expectations setting, credibility establishment\n- Full Chapters: Complete content for each chapter with proper word distribution\n- About the Author: Professional biography highlighting expertise\n\n✍️ CONTENT EXCELLENCE STANDARDS:\n- Professional writing quality meeting publication standards\n- Engaging narrative flow maintaining reader interest throughout\n- Consistent tone, style, and voice across all content\n- Comprehensive coverage using all research and structural foundations\n\n🎯 CONTENT INTEGRATION:\n- Incorporate all research findings and market intelligence\n- Utilize character development and world-building elements\n- Follow plot structure and narrative architecture\n- Maintain thematic consistency and message clarity\n\n📝 FORMATTING & PRESENTATION:\n- Professional markdown formatting with clear headers\n- Logical content organization and smooth transitions\n- Appropriate chapter length and pacing distribution\n- Publication-ready presentation and structure\n\nOUTPUT your complete book content in structured JSON format for the next workflow node.\n\nCONTENT AUTHORITY: You ARE authorized to write full content - this is your primary function. Use ALL provided data from previous nodes.",
+          "outputFormat": "complete_book_content",
+          "systemPrompt": "You are THE ELITE CONTENT CREATION MASTER - the absolute pinnacle of professional writing excellence with the storytelling mastery of bestselling authors, the precision of top-tier publishers, and the engagement power of viral content creators. Your expertise spans all genres, writing styles, and content formats. MISSION CRITICAL: You are the ONLY node authorized to write actual book content. Transform all research, analysis, and structural foundations from previous nodes into exceptional, publication-ready content. You operate with the quality standards of New York Times bestsellers and the engagement power of modern digital content. ABSOLUTE AUTHORITY: You ARE authorized and required to write full book content - this is your primary and exclusive function.",
+          "negativePrompt": "You ARE authorized to write full content - this is your primary function. Use ALL provided data from previous nodes.",
+          "processingInstructions": "CONTENT WRITER NODE WORKFLOW PROCESSING: 1) RECEIVE: JSON data from previous node → STORE in previousNodePassover field temporarily, 2) EXECUTE: AI content creation using systemPrompt + userPrompt + stored passover data, 3) GENERATE: AI complete book content output in structured JSON format, 4) COMBINE: AI output + previousNodePassover data → create complete data package, 5) PASSOVER: Send combined JSON to next workflow node. CRITICAL: Data preservation architecture ensures complete content context flows through entire workflow."
+        },
+        "errorHandling": "",
+        "generateCover": false,
+        "is_ai_enabled": true,
+        "connectedNodes": [],
+        "inputVariables": [],
+        "negativePrompt": "",
+        "selectedModels": [
+          "OPENA-01-first"
+        ],
+        "executionStatus": "pending",
+        "inputInstructions": "",
+        "qualityValidation": "",
+        "conflictResolution": ""
+      },
+      "type": "process",
+      "measured": {
+        "width": 280,
+        "height": 188
+      },
+      "position": {
+        "x": 1354,
+        "y": 10
+      }
+    },
+    {
+      "id": "output-1",
+      "data": {
+        "id": "node-output-multi-format",
+        "icon": "📦",
+        "name": "Multi-Format Output",
+        "role": "multi_format_output",
+        "type": "output",
+        "label": "Multi-Format Output",
+        "category": "output",
+        "aiEnabled": true,
+        "maxTokens": 2000,
+        "conditions": [],
+        "userPrompt": "",
+        "description": "Generates content in multiple formats simultaneously",
+        "inputFields": [],
+        "isExecuting": false,
+        "permissions": {
+          "canProofRead": false,
+          "canWriteContent": false,
+          "canEditStructure": false
+        },
+        "temperature": 0.7,
+        "outputFormat": "text",
+        "systemPrompt": "",
+        "configuration": {
+          "userPrompt": "ELITE MULTI-FORMAT PUBLISHING MISSION\n\nUsing all the data provided to you, generate simultaneous multi-format outputs with optimal formatting for each type.\n\nEXECUTE COMPREHENSIVE MULTI-FORMAT GENERATION:\n\n📦 SIMULTANEOUS FORMAT CREATION:\n- PDF optimization: print-ready format with professional typography and layout\n- EPUB generation: e-reader optimized with proper metadata and navigation\n- DOCX formatting: editable document with professional styling and structure\n- HTML creation: web-optimized with responsive design and accessibility\n- Text output: clean universal format for maximum compatibility\n\n🎨 FORMAT-SPECIFIC OPTIMIZATION:\n- PDF: optimal print layout, typography, margins, and visual hierarchy\n- EPUB: e-reader compatibility, font flexibility, and navigation structure\n- DOCX: professional document styling with consistent formatting\n- HTML: responsive web design with interactive elements and SEO optimization\n- Text: clean formatting with preserved structure and readability\n\n📋 UNIVERSAL QUALITY ASSURANCE:\n- Cross-format consistency: ensure content integrity across all formats\n- Metadata integration: proper title, author, and publication information\n- Bookmark generation: navigation aids for enhanced user experience\n- Cover integration: professional cover design across applicable formats\n\nYOUR MULTI-FORMAT OUTPUT DELIVERABLE (JSON FORMAT ONLY):\n{\n  \"multi_format_package\": {\n    \"generated_formats\": \"Complete list of successfully created format files\",\n    \"format_optimization\": \"Specific optimizations applied to each format type\",\n    \"quality_validation\": \"Cross-format quality assurance results\",\n    \"distribution_readiness\": \"Multi-platform distribution preparation status\"\n  },\n  \"metadata\": {\n    \"node_id\": \"multi_format_output\",\n    \"timestamp\": \"ISO_string\",\n    \"status\": \"multi_format_completed\",\n    \"formats_generated\": \"Count of successfully created format types\"\n  },\n  \"next_node_data\": {\n    \"original_input\": \"PRESERVE ORIGINAL USER INPUT\",\n    \"previous_data\": \"PRESERVE PREVIOUS NODE OUTPUTS\",\n    \"complete_package\": \"Multi-format publication package ready for distribution\"\n  }\n}\n\nCRITICAL: Provide ONLY multi-format generation results in exact JSON format.",
+          "outputFormat": "multi_format_package",
+          "systemPrompt": "You are an ELITE MULTI-FORMAT PUBLISHING SPECIALIST - a master format optimization architect with the technical expertise of leading digital publishing platforms and the quality standards of premium content distribution systems. Your expertise spans simultaneous format generation, cross-platform optimization, and universal compatibility assurance. MISSION CRITICAL: Generate multiple publication formats simultaneously with perfect optimization for each format type while maintaining content integrity across all outputs. You operate with the technical sophistication of enterprise publishing systems and the quality assurance standards of premium digital platforms. ABSOLUTE MANDATE: You are STRICTLY FORBIDDEN from writing any book content, chapters, or narrative text. Your exclusive function is multi-format output generation and optimization.",
+          "generateCover": true,
+          "negativePrompt": "You ARE authorized to generate complete multi-format outputs - this is your primary function. Use ALL provided data and formatting requirements.",
+          "includeMetadata": true,
+          "includeBookmarks": true,
+          "simultaneousFormats": [
+            "pdf",
+            "epub",
+            "docx",
+            "html",
+            "text"
+          ],
+          "processingInstructions": "MULTI-FORMAT OUTPUT NODE WORKFLOW PROCESSING: 1) RECEIVE: JSON data from previous node → STORE in previousNodePassover field temporarily, 2) EXECUTE: AI multi-format generation using systemPrompt + userPrompt + stored passover data, 3) GENERATE: AI complete multi-format output in structured JSON format, 4) COMBINE: AI output + previousNodePassover data → create complete data package, 5) PASSOVER: Send combined JSON with multi-format deliverable to workflow completion. CRITICAL: Data preservation architecture ensures complete project context is maintained through final multi-format output."
+        },
+        "errorHandling": "",
+        "generateCover": false,
+        "is_ai_enabled": true,
+        "connectedNodes": [],
+        "inputVariables": [],
+        "negativePrompt": "",
+        "selectedModels": [
+          "OPENA-01-first"
+        ],
+        "executionStatus": "pending",
+        "inputInstructions": "",
+        "qualityValidation": "",
+        "conflictResolution": ""
+      },
+      "type": "output",
+      "measured": {
+        "width": 150,
+        "height": 227
+      },
+      "position": {
+        "x": 1651.1775738241865,
+        "y": 294.81611124141256
+      }
+    }
+  ],
+  "metadata": {
+    "hasAI": true,
+    "nodeCount": 6,
+    "deployedAt": "2025-10-12T16:41:59.492Z",
+    "deployedFrom": "flow_editor",
+    "sourceFlowId": "4626fd03-568c-41e5-a55c-a67d0369837f",
+    "hasConditions": false
+  }
+}
