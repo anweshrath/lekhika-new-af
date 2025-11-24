@@ -1179,22 +1179,25 @@ class ExportService {
                         compiledContent.userInput?.font_family || 
                         'Georgia, serif'
       
-      // Flatten sections - handle both arrays and strings  
+      // Flatten sections - handle both arrays and strings
       // STANDARDIZED: All sections now have title, chapterNumber, and content from compileWorkflowContent
       let flatSections = []
-      const rawSections = compiledContent.sections || []
+      // Only treat contentType === 'chapter' (or unspecified) as real book chapters
+      const rawSections = (compiledContent.sections || []).filter(
+        (section) => !section.contentType || section.contentType === 'chapter'
+      )
       
       rawSections.forEach((section, idx) => {
         if (Array.isArray(section.content)) {
           section.content.forEach(ch => {
-            // SURGICAL FIX: Use actual title - no placeholders
-            const chapterTitle = ch.title || section.title
-            if (!chapterTitle || !chapterTitle.trim()) {
-              console.warn(`⚠️ Skipping chapter in Markdown - missing title`)
+            // SURGICAL FIX: Use actual title from structured data – never fabricate placeholders.
+            const chapterTitle = ch.title || section.title || section.metadata?.title
+            if (!chapterTitle || !String(chapterTitle).trim()) {
+              console.warn(`⚠️ Skipping chapter in export (array content) – missing reliable title`)
               return
             }
             flatSections.push({
-              title: chapterTitle.trim(),
+              title: String(chapterTitle).trim(),
               content: this.cleanContentForExport(ch.content || ''),
               metadata: { 
                 chapterNumber: ch.chapter || section.chapterNumber || flatSections.length + 1,
@@ -1203,13 +1206,14 @@ class ExportService {
             })
           })
         } else if (typeof section.content === 'string' && section.content.trim()) {
-          // SURGICAL FIX: Use actual section.title - no placeholders
-          if (!section.title || !section.title.trim()) {
-            console.warn(`⚠️ Skipping section ${idx + 1} in Markdown - missing title`)
+          // SURGICAL FIX: Use actual structured title only.
+          const title = section.title || section.metadata?.title
+          if (!title || !String(title).trim()) {
+            console.warn(`⚠️ Skipping section ${idx + 1} in export – missing reliable title`)
             return
           }
           flatSections.push({
-            title: section.title.trim(),
+            title: String(title).trim(),
             content: this.cleanContentForExport(section.content),
             metadata: { 
               chapterNumber: section.chapterNumber || section.metadata?.chapterNumber || section.metadata?.chapter || (idx + 1),

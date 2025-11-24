@@ -43,6 +43,14 @@ const WorkerControlDashboard = () => {
   const [selectedExecution, setSelectedExecution] = useState(null)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [isEmergencyCommandsOpen, setIsEmergencyCommandsOpen] = useState(false)
+  const [queueStatus, setQueueStatus] = useState({
+    enabled: false,
+    stats: null,
+    loading: true,
+    error: null,
+    message: null
+  })
+  const [queueExecutionId, setQueueExecutionId] = useState('')
 
   // Worker status colors
   const getStatusColor = (status) => {
@@ -75,6 +83,36 @@ const WorkerControlDashboard = () => {
       }
     } catch (error) {
       setWorkerStatus({ status: 'error', error: error.message })
+    }
+  }
+
+  // Fetch queue status (Redis queue)
+  const fetchQueueStatus = async () => {
+    try {
+      const response = await fetch('http://157.254.24.49:3001/queue/stats')
+      if (!response.ok) {
+        setQueueStatus(prev => ({
+          ...prev,
+          loading: false,
+          error: `HTTP ${response.status}`
+        }))
+        return
+      }
+
+      const data = await response.json()
+      setQueueStatus({
+        enabled: !!data.enabled,
+        stats: data.stats || null,
+        loading: false,
+        error: null,
+        message: data.message || null
+      })
+    } catch (error) {
+      setQueueStatus(prev => ({
+        ...prev,
+        loading: false,
+        error: error.message
+      }))
     }
   }
 
@@ -310,13 +348,138 @@ const WorkerControlDashboard = () => {
     }
   }
 
+  // Retry a queued execution by executionId
+  const retryQueuedExecution = async () => {
+    const trimmed = queueExecutionId.trim()
+    if (!trimmed) {
+      toast.error('Enter an executionId to retry in queue')
+      return
+    }
+
+    try {
+      const response = await fetch(`http://157.254.24.49:3001/queue/retry/${trimmed}`, {
+        method: 'POST'
+      })
+      if (response.ok) {
+        toast.success(`Queue retry requested for ${trimmed}`)
+        setQueueExecutionId('')
+        fetchQueueStatus()
+      } else {
+        const data = await response.json().catch(() => ({}))
+        toast.error(data.error || 'Failed to retry queued execution')
+      }
+    } catch (error) {
+      toast.error('Failed to retry queued execution: ' + error.message)
+    }
+  }
+
+  const pauseQueue = async () => {
+    try {
+      const response = await fetch('http://157.254.24.49:3001/queue/pause', { method: 'POST' })
+      if (response.ok) {
+        toast.success('Queue paused')
+        fetchQueueStatus()
+      } else {
+        const data = await response.json().catch(() => ({}))
+        toast.error(data.error || 'Failed to pause queue')
+      }
+    } catch (error) {
+      toast.error('Failed to pause queue: ' + error.message)
+    }
+  }
+
+  const resumeQueue = async () => {
+    try {
+      const response = await fetch('http://157.254.24.49:3001/queue/resume', { method: 'POST' })
+      if (response.ok) {
+        toast.success('Queue resumed')
+        fetchQueueStatus()
+      } else {
+        const data = await response.json().catch(() => ({}))
+        toast.error(data.error || 'Failed to resume queue')
+      }
+    } catch (error) {
+      toast.error('Failed to resume queue: ' + error.message)
+    }
+  }
+
+  const clearFailedQueueJobs = async () => {
+    if (!confirm('Clear ALL failed jobs from the queue? This cannot be undone.')) return
+    try {
+      const response = await fetch('http://157.254.24.49:3001/queue/clear/failed', { method: 'POST' })
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}))
+        toast.success(data.message || 'Cleared failed queue jobs')
+        fetchQueueStatus()
+      } else {
+        const data = await response.json().catch(() => ({}))
+        toast.error(data.error || 'Failed to clear failed jobs')
+      }
+    } catch (error) {
+      toast.error('Failed to clear failed jobs: ' + error.message)
+    }
+  }
+
+  const clearDelayedQueueJobs = async () => {
+    if (!confirm('Clear ALL delayed jobs from the queue? This cannot be undone.')) return
+    try {
+      const response = await fetch('http://157.254.24.49:3001/queue/clear/delayed', { method: 'POST' })
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}))
+        toast.success(data.message || 'Cleared delayed queue jobs')
+        fetchQueueStatus()
+      } else {
+        const data = await response.json().catch(() => ({}))
+        toast.error(data.error || 'Failed to clear delayed jobs')
+      }
+    } catch (error) {
+      toast.error('Failed to clear delayed jobs: ' + error.message)
+    }
+  }
+
+  const clearWaitingQueueJobs = async () => {
+    if (!confirm('Clear ALL waiting jobs from the queue? This will drop jobs that have not started yet.')) return
+    try {
+      const response = await fetch('http://157.254.24.49:3001/queue/clear/waiting', { method: 'POST' })
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}))
+        toast.success(data.message || 'Cleared waiting queue jobs')
+        fetchQueueStatus()
+      } else {
+        const data = await response.json().catch(() => ({}))
+        toast.error(data.error || 'Failed to clear waiting jobs')
+      }
+    } catch (error) {
+      toast.error('Failed to clear waiting jobs: ' + error.message)
+    }
+  }
+
+  const hardResetQueue = async () => {
+    if (!confirm('⚠️ HARD RESET QUEUE?\n\nThis will clear ALL waiting, delayed and failed jobs.\nActive executions must be stopped separately.\n\nAre you absolutely sure?')) {
+      return
+    }
+    try {
+      const response = await fetch('http://157.254.24.49:3001/queue/reset', { method: 'POST' })
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}))
+        toast.success(data.message || 'Queue reset applied')
+        fetchQueueStatus()
+      } else {
+        const data = await response.json().catch(() => ({}))
+        toast.error(data.error || 'Failed to reset queue')
+      }
+    } catch (error) {
+      toast.error('Failed to reset queue: ' + error.message)
+    }
+  }
+
   // Auto-refresh
   useEffect(() => {
     let isMounted = true
     
     const initialFetch = async () => {
       try {
-        await Promise.all([fetchWorkerStatus(), fetchLogs()])
+        await Promise.all([fetchWorkerStatus(), fetchLogs(), fetchQueueStatus()])
       } catch (error) {
         console.error('Initial fetch failed:', error)
       } finally {
@@ -333,7 +496,7 @@ const WorkerControlDashboard = () => {
       interval = setInterval(async () => {
         if (isMounted) {
           try {
-            await Promise.all([fetchWorkerStatus(), fetchLogs()])
+            await Promise.all([fetchWorkerStatus(), fetchLogs(), fetchQueueStatus()])
           } catch (error) {
             console.error('Auto-refresh failed:', error)
           }
@@ -575,6 +738,83 @@ const WorkerControlDashboard = () => {
         </motion.div>
       </div>
 
+      {/* Queue Status (Redis) */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.35 }}
+        className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl border border-gray-700 shadow-lg p-6 mb-6 hover:border-teal-500/50 transition-colors"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-teal-500/20 rounded-lg">
+              <BarChart3 className="w-6 h-6 text-teal-400" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                Queue Status (Redis)
+                <span
+                  className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                    queueStatus.enabled
+                      ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40'
+                      : 'bg-gray-700/40 text-gray-300 border border-gray-600/60'
+                  }`}
+                >
+                  {queueStatus.enabled ? 'ENABLED' : 'DISABLED'}
+                </span>
+              </h3>
+              <p className="text-gray-400 text-xs mt-1">
+                Real-time job counts from the Redis-backed execution queue.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="bg-gray-900/60 rounded-lg p-3 border border-gray-700/70">
+            <p className="text-xs text-gray-400 mb-1">Waiting</p>
+            <p className="text-2xl font-bold text-teal-300">
+              {queueStatus.stats?.wait ?? 0}
+            </p>
+          </div>
+          <div className="bg-gray-900/60 rounded-lg p-3 border border-gray-700/70">
+            <p className="text-xs text-gray-400 mb-1">Active</p>
+            <p className="text-2xl font-bold text-blue-300">
+              {queueStatus.stats?.active ?? 0}
+            </p>
+          </div>
+          <div className="bg-gray-900/60 rounded-lg p-3 border border-gray-700/70">
+            <p className="text-xs text-gray-400 mb-1">Completed</p>
+            <p className="text-2xl font-bold text-green-300">
+              {queueStatus.stats?.completed ?? 0}
+            </p>
+          </div>
+          <div className="bg-gray-900/60 rounded-lg p-3 border border-gray-700/70">
+            <p className="text-xs text-gray-400 mb-1">Failed</p>
+            <p className="text-2xl font-bold text-red-300">
+              {queueStatus.stats?.failed ?? 0}
+            </p>
+          </div>
+          <div className="bg-gray-900/60 rounded-lg p-3 border border-gray-700/70">
+            <p className="text-xs text-gray-400 mb-1">Delayed</p>
+            <p className="text-2xl font-bold text-yellow-300">
+              {queueStatus.stats?.delayed ?? 0}
+            </p>
+          </div>
+        </div>
+
+        {(queueStatus.error || queueStatus.message) && (
+          <div className="mt-3 text-xs text-gray-400 flex items-center gap-2">
+            <Info className="w-4 h-4 text-gray-500" />
+            <span>
+              {queueStatus.error
+                ? `Queue status error: ${queueStatus.error}`
+                : queueStatus.message}
+            </span>
+          </div>
+        )}
+      </motion.div>
+
       {/* Control Panel */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -697,6 +937,152 @@ const WorkerControlDashboard = () => {
             <span className="text-xs text-purple-100 opacity-75">Export log file</span>
           </motion.button>
         </div>
+
+        {/* Queue Controls */}
+        <div className="mt-8 pt-6 border-t border-gray-700/60">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-teal-500/20 rounded-lg">
+                <BarChart3 className="w-5 h-5 text-teal-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white">Queue Controls (SuperAdmin)</h3>
+                <p className="text-xs text-gray-400">
+                  Inspect and control Redis-backed job queue for workflow executions.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+            <input
+              type="text"
+              value={queueExecutionId}
+              onChange={(e) => setQueueExecutionId(e.target.value)}
+              placeholder="Enter executionId to retry in queue"
+              className="flex-1 px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+            />
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={retryQueuedExecution}
+              className="px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 text-white rounded-lg text-sm font-semibold flex items-center gap-2 border border-teal-500/40 shadow-lg hover:shadow-teal-500/40"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Retry in Queue
+            </motion.button>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={pauseQueue}
+              className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-xs text-white rounded-lg border border-yellow-500/40 flex items-center gap-2"
+            >
+              <Square className="w-3 h-3 text-yellow-300" />
+              Pause Queue
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={resumeQueue}
+              className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-xs text-white rounded-lg border border-green-500/40 flex items-center gap-2"
+            >
+              <Play className="w-3 h-3 text-green-300" />
+              Resume Queue
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={clearFailedQueueJobs}
+              className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-xs text-white rounded-lg border border-red-500/50 flex items-center gap-2"
+            >
+              <Trash2 className="w-3 h-3 text-red-300" />
+              Clear Failed
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={clearDelayedQueueJobs}
+              className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-xs text-white rounded-lg border border-orange-500/50 flex items-center gap-2"
+            >
+              <Clock className="w-3 h-3 text-orange-300" />
+              Clear Delayed
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={clearWaitingQueueJobs}
+              className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-xs text-white rounded-lg border border-sky-500/50 flex items-center gap-2"
+            >
+              <Zap className="w-3 h-3 text-sky-300" />
+              Clear Waiting
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={hardResetQueue}
+              className="px-3 py-2 bg-gradient-to-r from-red-700 to-red-800 hover:from-red-600 hover:to-red-700 text-xs text-white rounded-lg border border-red-500/70 flex items-center gap-2 shadow-lg shadow-red-500/40"
+            >
+              <AlertTriangle className="w-3 h-3 text-red-200" />
+              Reset Queue (Nuke)
+            </motion.button>
+          </div>
+
+          {!queueStatus.enabled && (
+            <p className="mt-2 text-xs text-yellow-400 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              Queue is currently disabled in worker .env (QUEUE_ENABLED=false). Retries will only work when queue is enabled.
+            </p>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Active Executions List */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.42 }}
+        className="bg-gray-800 rounded-xl border border-gray-700 shadow-xl p-6"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-500/20 rounded-lg">
+              <Activity className="w-5 h-5 text-green-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-white">Active Executions (Live)</h3>
+              <p className="text-xs text-gray-400">
+                These are executions the worker thinks are currently running. You can stop them individually.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {Array.isArray(workerStatus?.activeExecutionIds) && workerStatus.activeExecutionIds.length > 0 ? (
+          <div className="space-y-2">
+            {workerStatus.activeExecutionIds.map((id) => (
+              <div
+                key={id}
+                className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-900/60 border border-gray-700/70"
+              >
+                <span className="font-mono text-xs text-gray-200 truncate">{id}</span>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => stopExecution(id)}
+                  className="px-3 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded-lg flex items-center gap-1"
+                >
+                  <StopCircle className="w-3 h-3" />
+                  Stop
+                </motion.button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-500">No active executions tracked by the worker.</p>
+        )}
       </motion.div>
 
       {/* Emergency Terminal Commands - Collapsible Accordion */}

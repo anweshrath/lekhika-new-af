@@ -312,6 +312,18 @@ ${narrativeStructureService.buildChapterContext(
 
 CUSTOM INSTRUCTIONS: ${allData.custom_instructions || 'Generate comprehensive, professional content that provides real value to the target audience.'}`
 
+    // SURGICAL: Inject user guidance from regenerateContext if this is a resume retry
+    if (pipelineData.regenerateContext?.manualInstruction) {
+      const userGuidance = pipelineData.regenerateContext.manualInstruction.trim()
+      if (userGuidance) {
+        finalPrompt += `\n\n🔄 USER GUIDANCE FOR RETRY (CRITICAL - FOLLOW THESE INSTRUCTIONS):
+${userGuidance}
+
+IMPORTANT: The previous attempt failed validation. Apply the guidance above to fix the issues and generate improved content.`
+        console.log(`📝 Injected user guidance into prompt for retry: ${userGuidance.substring(0, 100)}...`)
+      }
+    }
+
     finalPrompt = finalPrompt + wordCountEnforcement
 
     console.log('📝 Final Prompt Debug:')
@@ -322,11 +334,11 @@ CUSTOM INSTRUCTIONS: ${allData.custom_instructions || 'Generate comprehensive, p
     console.log('  - Final prompt length:', finalPrompt.length)
     console.log('  - Final prompt preview:', finalPrompt.substring(0, 500))
 
-    if (pipelineData.superAdminUser) {
-      await aiServiceInstance.setUser(pipelineData.superAdminUser)
-    } else {
-      throw new Error('SuperAdmin user not provided for AI service')
+    const executionUser = pipelineData.executionUser
+    if (!executionUser || !executionUser.id) {
+      throw new Error('Execution user not provided for AI service - user context is required for API key access and token management')
     }
+    await aiServiceInstance.setUser(executionUser)
 
     if (!aiServiceInstance.providers[modelConfig.providerName]) {
       throw new Error(`Provider ${modelConfig.providerName} not available. Please check API key configuration.`)

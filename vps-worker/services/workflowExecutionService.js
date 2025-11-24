@@ -5,6 +5,7 @@
  */
 
 const { getSupabase } = require('./supabase.js')
+const logger = require('../utils/logger')
 const { narrativeStructureService } = require('./narrativeStructureService.js')
 const { professionalBookFormatter } = require('./professionalBookFormatter.js')
 const exportService = require('./exportService.js')
@@ -170,14 +171,21 @@ class WorkflowExecutionService {
    * @param {Function} progressCallback - Progress update callback
    * @returns {Object} Final workflow output
    */
-  async executeWorkflow(nodes, edges, initialInput, workflowId, progressCallback = null, superAdminUser = null) {
+  async executeWorkflow(nodes, edges, initialInput, workflowId, progressCallback = null, executionUser = null) {
     const startTime = Date.now() // DEFINE START TIME FOR EXECUTION TRACKING
     
     try {
-      // Validate SuperAdmin authentication
-      if (!superAdminUser || !superAdminUser.id) {
-        throw new Error('SuperAdmin authentication required for workflow execution')
+      // SURGICAL: Validate execution user context (needed for provider keys, limits, analytics)
+      if (!executionUser || !executionUser.id) {
+        logger.error(`❌ Execution user validation failed:`, { 
+          executionUser, 
+          hasId: executionUser?.id,
+          workflowId 
+        })
+        throw new Error('Execution user context required for workflow execution - user_id is missing')
       }
+      
+      logger.info(`✅ Execution user validated:`, { id: executionUser.id, role: executionUser.role, tier: executionUser.tier })
 
       // Initialize execution state
       stateManager.executionState.set(workflowId, {
@@ -201,8 +209,31 @@ class WorkflowExecutionService {
       // Build dependency maps for validation during execution
       const { incomingEdges, outgoingEdges } = buildDependencyMapsHelper(nodes, edges)
       
+      // SURGICAL: Log executionUser before initializing pipeline
+      logger.info(`🔍 workflowExecutionService.executeWorkflow - executionUser:`, { 
+        hasExecutionUser: !!executionUser, 
+        id: executionUser?.id, 
+        role: executionUser?.role,
+        tier: executionUser?.tier 
+      });
+      
       // Initialize data pipeline with user input
-      let pipelineData = initializePipelineDataHelper(initialInput, workflowId, superAdminUser, executionOrder)
+      let pipelineData = initializePipelineDataHelper(initialInput, workflowId, executionUser, executionOrder)
+      
+      // SURGICAL: Inject regenerateContext into pipelineData so content generation handlers can access user guidance
+      if (regenerateContext) {
+        pipelineData.regenerateContext = regenerateContext
+        logger.info(`✅ Injected regenerateContext into pipelineData for failed node retry`)
+      }
+      
+      // SURGICAL: Verify executionUser is in pipelineData
+      if (!pipelineData.executionUser || !pipelineData.executionUser.id) {
+        logger.error(`❌ CRITICAL: pipelineData.executionUser is missing after initialization!`, {
+          hasExecutionUser: !!pipelineData.executionUser,
+          pipelineDataKeys: Object.keys(pipelineData)
+        });
+        throw new Error('Execution user context lost during pipeline initialization');
+      }
 
       console.log('🔍 WORKFLOW EXECUTION DEBUG:')
       console.log('  - Initial input:', initialInput)
@@ -460,15 +491,27 @@ class WorkflowExecutionService {
             timestamp: new Date()
           }
           
-          // CRITICAL: Save checkpoint data to DB for resume functionality
+          // CRITICAL: Save checkpoint data to DB for resume functionality (single DB write on failure)
           const currentState = stateManager.getExecutionState(workflowId)
+          
+          // Find last completed node's output for resume
+          let lastCompletedOutput = null
+          if (i > 0 && pipelineData.nodeOutputs) {
+            const lastCompletedNodeId = executionOrder[i - 1]?.id
+            if (lastCompletedNodeId && pipelineData.nodeOutputs[lastCompletedNodeId]) {
+              lastCompletedOutput = pipelineData.nodeOutputs[lastCompletedNodeId]
+            }
+          }
+          
           const checkpointData = {
             nodeId: node.id,
             nodeName: node.data.label,
             nodeIndex: i,
             nodeOutputs: pipelineData.nodeOutputs || {},
+            lastNodeOutput: lastCompletedOutput, // SURGICAL: Include last completed node output for resume
             structuralNodeOutputs: pipelineData.structuralNodeOutputs || {}, // SURGICAL: Preserve structural outputs in checkpoint
             userInput: pipelineData.userInput,
+            executionUser: pipelineData.executionUser, // SURGICAL: Include executionUser for resume
             executionOrder: executionOrder.map(n => ({ id: n.id, type: n.data.type })),
             completedNodes: executionOrder.slice(0, i).map(n => n.id),
             failedAtNode: node.id,
@@ -658,9 +701,35 @@ class WorkflowExecutionService {
    * @param {Function} progressCallback - Progress callback
    * @returns {Object} Execution result
    */
-  async resumeExecution(executionId, nodes, edges, progressCallback = null) {
+  async resumeExecution(executionId, nodes, edges, progressCallback = null, regenerateContext = null) {
     try {
       console.log(`🔄 Resuming execution: ${executionId}`)
+      if (regenerateContext?.manualInstruction) {
+        logger.info(`📝 User guidance provided for resume:`, regenerateContext.manualInstruction.substring(0, 100))
+      }
+      
+      // Load checkpoint & user context from database (used by both in-memory + DB fallback)
+      const supabase = getSupabase()
+      const { data: executionData, error } = await supabase
+        .from('engine_executions')
+        .select('execution_data, input_data, status, user_id')
+        .eq('id', executionId)
+        .single()
+      
+      if (error) {
+        throw new Error(`Failed to load execution data: ${error.message}`)
+      }
+      
+      // Build execution user context from persisted execution row
+      if (!executionData.user_id) {
+        throw new Error(`Cannot resume execution ${executionId}: user_id is missing from execution record. This execution cannot be resumed.`)
+      }
+      
+      const executionUser = {
+        id: executionData.user_id,
+        role: 'user',
+        tier: executionData.execution_data?.options?.tier || 'hobby'
+      }
       
       // FALLBACK 0: Check in-memory execution state first (if worker didn't restart)
       const inMemoryState = stateManager.getExecutionState(executionId)
@@ -671,7 +740,9 @@ class WorkflowExecutionService {
           userInput: checkpointData.userInput || inMemoryState.userInput || {},
           nodeOutputs: checkpointData.nodeOutputs || {},
           lastNodeOutput: null,
-          structuralNodeOutputs: checkpointData.structuralNodeOutputs || {} // SURGICAL: Preserve structural outputs on resume
+          structuralNodeOutputs: checkpointData.structuralNodeOutputs || {}, // SURGICAL: Preserve structural outputs on resume
+          executionUser: executionUser || null,
+          regenerateContext: regenerateContext // SURGICAL: Include user guidance for failed node retry
         }
         
         const completedNodeIds = checkpointData.completedNodes || Object.keys(pipelineData.nodeOutputs)
@@ -683,17 +754,27 @@ class WorkflowExecutionService {
         // SURGICAL: Rebuild structuralNodeOutputs from nodeOutputs if not in checkpoint
         rebuildStructuralNodeOutputsHelper(pipelineData)
         
-        const executionOrder = this.calculateExecutionOrder(nodes, edges)
+        // Use the canonical execution-order helper (same as main execute path)
+        const executionOrder = buildExecutionOrderHelper(nodes, edges)
         let resumeIndex = 0
         if (checkpointData.failedAtNode) {
+          // SURGICAL: Resume FROM the failed node, not before it
           const failedNodeIndex = executionOrder.findIndex(n => n.id === checkpointData.failedAtNode)
-          if (failedNodeIndex > 0) {
-            resumeIndex = failedNodeIndex - 1
+          if (failedNodeIndex >= 0) {
+            resumeIndex = failedNodeIndex // Resume FROM the failed node
+            logger.info(`🔄 Resuming FROM failed node ${checkpointData.failedAtNode} at index ${resumeIndex}`)
+          } else {
+            logger.warn(`⚠️ Failed node ${checkpointData.failedAtNode} not found in execution order, starting from beginning`)
+            resumeIndex = 0
           }
         } else if (completedNodeIds.length > 0) {
           const lastCompletedId = completedNodeIds[completedNodeIds.length - 1]
           resumeIndex = executionOrder.findIndex(n => n.id === lastCompletedId)
           if (resumeIndex === -1) resumeIndex = 0
+          // Resume from the node AFTER the last completed one
+          if (resumeIndex < executionOrder.length - 1) {
+            resumeIndex = resumeIndex + 1
+          }
         }
         
         stateManager.updateExecutionState(executionId, {
@@ -703,30 +784,27 @@ class WorkflowExecutionService {
           resumedFromNode: executionOrder[resumeIndex]?.id || null
         })
         
-        return await continueExecutionFromNodeHelper(
+        const resumeResult = await continueExecutionFromNodeHelper(
           executionId,
           nodes,
           edges,
           pipelineData.userInput,
           progressCallback,
-          null,
+          executionUser || null,
           resumeIndex,
           pipelineData.nodeOutputs,
           buildExecutionOrderHelper,
-          this.executeNode.bind(this)
+          this.executeNode.bind(this),
+          regenerateContext // SURGICAL: Pass user guidance for failed node retry
         )
-      }
-      
-      // Load checkpoint data from database
-      const supabase = getSupabase()
-      const { data: executionData, error } = await supabase
-        .from('engine_executions')
-        .select('execution_data, input_data, status')
-        .eq('id', executionId)
-        .single()
-      
-      if (error) {
-        throw new Error(`Failed to load execution data: ${error.message}`)
+        
+        // SURGICAL: Handle error result from resume (don't throw - return it so frontend can display)
+        if (resumeResult && resumeResult.success === false) {
+          console.error(`❌ Resume failed at node: ${resumeResult.failedAtNode}`, resumeResult.error)
+          return resumeResult
+        }
+        
+        return resumeResult
       }
       
       // Log what we actually have in execution_data for debugging
@@ -737,9 +815,28 @@ class WorkflowExecutionService {
         executionDataKeys: executionData.execution_data ? Object.keys(executionData.execution_data) : []
       })
       
-      const checkpointData = executionData.execution_data?.checkpointData
+      let checkpointData = executionData.execution_data?.checkpointData
       if (!checkpointData || !checkpointData.nodeOutputs) {
-        throw new Error('No checkpoint data found - cannot resume')
+        // SURGICAL FALLBACK: Rebuild checkpoint data from nodeResults when explicit
+        // checkpointData is missing but we still have real node outputs persisted.
+        const nodeResults = executionData.execution_data?.nodeResults
+        if (nodeResults && Object.keys(nodeResults).length > 0) {
+          console.warn('⚠️ No checkpointData found in execution_data – rebuilding fallback checkpoint from nodeResults for resume.')
+          checkpointData = {
+            nodeId: executionData.execution_data.failedNodeId || null,
+            nodeName: executionData.execution_data.failedNodeName || null,
+            nodeIndex: null,
+            nodeOutputs: nodeResults,
+            userInput: executionData.input_data || {},
+            executionOrder: [],
+            completedNodes: Object.keys(nodeResults),
+            failedAtNode: executionData.execution_data.failedNodeId || null,
+            structuralNodeOutputs: executionData.execution_data.structuralNodeOutputs || {},
+            timestamp: new Date().toISOString()
+          }
+        } else {
+          throw new Error('No checkpoint data found - cannot resume')
+        }
       }
       
       console.log(`📦 Loaded checkpoint:`, {
@@ -752,7 +849,9 @@ class WorkflowExecutionService {
         userInput: checkpointData.userInput || executionData.input_data || {},
         nodeOutputs: checkpointData.nodeOutputs || {},
         lastNodeOutput: null,
-        structuralNodeOutputs: checkpointData.structuralNodeOutputs || {} // SURGICAL: Preserve structural outputs on resume
+        structuralNodeOutputs: checkpointData.structuralNodeOutputs || {}, // SURGICAL: Preserve structural outputs on resume
+        executionUser: executionUser || null,
+        regenerateContext: regenerateContext // SURGICAL: Include user guidance for failed node retry
       }
       
       // Get the last completed node output
@@ -773,8 +872,8 @@ class WorkflowExecutionService {
         })
       }
       
-      // Calculate execution order
-      const executionOrder = this.calculateExecutionOrder(nodes, edges)
+      // Calculate execution order using the canonical helper (same as main execute path)
+      const executionOrder = buildExecutionOrderHelper(nodes, edges)
       
       // Find the index to resume from (one step back from failed node)
       let resumeIndex = 0
@@ -804,22 +903,66 @@ class WorkflowExecutionService {
       })
       
       // Continue execution from resume point
-      return await continueExecutionFromNodeHelper(
+      const resumeResult = await continueExecutionFromNodeHelper(
         executionId,
         nodes,
         edges,
         pipelineData.userInput,
         progressCallback,
-        null, // superAdminUser
+        executionUser, // SURGICAL: executionUser is already validated above, don't use || null
         resumeIndex,
         pipelineData.nodeOutputs,
         buildExecutionOrderHelper,
         this.executeNode.bind(this)
       )
       
+      // SURGICAL: Handle error result from resume (don't throw - return it so frontend can display)
+      if (resumeResult && resumeResult.success === false) {
+        console.error(`❌ Resume failed at node: ${resumeResult.failedAtNode}`, resumeResult.error)
+        // Don't throw - return error result so frontend can display it properly
+        return resumeResult
+      }
+      
+      // SURGICAL: After successful resume, delete checkpoint from DB (CRUD it out)
+      // Checkpoint is only needed for resume - once execution continues, we don't need it
+      if (resumeResult && resumeResult.success !== false) {
+        try {
+          const supabase = getSupabase()
+          const { data: currentExecData } = await supabase
+            .from('engine_executions')
+            .select('execution_data')
+            .eq('id', executionId)
+            .single()
+          
+          if (currentExecData?.execution_data?.checkpointData) {
+            const updatedExecutionData = { ...currentExecData.execution_data }
+            delete updatedExecutionData.checkpointData // CRUD it out
+            
+            await supabase
+              .from('engine_executions')
+              .update({ execution_data: updatedExecutionData })
+              .eq('id', executionId)
+            
+            console.log(`🗑️ Deleted checkpoint from DB after successful resume for ${executionId}`)
+          }
+        } catch (cleanupError) {
+          // Don't fail resume if cleanup fails - just log it
+          console.warn(`⚠️ Failed to cleanup checkpoint after resume:`, cleanupError.message)
+        }
+      }
+      
+      return resumeResult
+      
     } catch (error) {
-      console.error('❌ Resume failed:', error)
-      throw error
+      console.error('❌ Resume failed with exception:', error)
+      // SURGICAL: Return error result instead of throwing (so frontend can display it)
+      return {
+        success: false,
+        status: 'failed',
+        error: error.message,
+        fullError: error.toString(),
+        stack: error.stack
+      }
     }
   }
 
@@ -1138,7 +1281,7 @@ class WorkflowExecutionService {
   // REMOVED: All state management methods extracted to workflow/state/executionStateManager.js
   // Access via: stateManager.updateExecutionState(), stateManager.stopWorkflow(), etc.
 
-  async restartFromCheckpoint(workflowId, nodeId, nodes, edges, initialInput, progressCallback, superAdminUser) {
+  async restartFromCheckpoint(workflowId, nodeId, nodes, edges, initialInput, progressCallback, executionUser) {
     return await restartFromCheckpointHelper(
       workflowId,
       nodeId,
@@ -1146,7 +1289,7 @@ class WorkflowExecutionService {
       edges,
       initialInput,
       progressCallback,
-      superAdminUser,
+      executionUser,
       buildExecutionOrderHelper,
       this.executeNode.bind(this),
       this.restartFailedNode.bind(this),
@@ -1154,7 +1297,7 @@ class WorkflowExecutionService {
     )
   }
 
-  async restartFailedNode(workflowId, nodeId, nodes, edges, initialInput, progressCallback, superAdminUser) {
+  async restartFailedNode(workflowId, nodeId, nodes, edges, initialInput, progressCallback, executionUser) {
     return await restartFailedNodeHelper(
       workflowId,
       nodeId,
@@ -1162,14 +1305,14 @@ class WorkflowExecutionService {
       edges,
       initialInput,
       progressCallback,
-      superAdminUser,
+      executionUser,
       buildExecutionOrderHelper,
       this.executeNode.bind(this),
       this.continueWorkflowFromNode.bind(this)
     )
   }
 
-  async continueWorkflowFromNode(workflowId, fromNodeId, nodes, edges, initialInput, progressCallback, superAdminUser) {
+  async continueWorkflowFromNode(workflowId, fromNodeId, nodes, edges, initialInput, progressCallback, executionUser) {
     return await continueWorkflowFromNodeHelper(
       workflowId,
       fromNodeId,
@@ -1177,21 +1320,21 @@ class WorkflowExecutionService {
       edges,
       initialInput,
       progressCallback,
-      superAdminUser,
+      executionUser,
       buildExecutionOrderHelper,
       this.executeNode.bind(this),
       this.continueExecutionFromNode.bind(this)
     )
   }
 
-  async continueExecutionFromNode(workflowId, nodes, edges, initialInput, progressCallback, superAdminUser, startIndex, existingOutputs) {
+  async continueExecutionFromNode(workflowId, nodes, edges, initialInput, progressCallback, executionUser, startIndex, existingOutputs) {
     return await continueExecutionFromNodeHelper(
       workflowId,
       nodes,
       edges,
       initialInput,
       progressCallback,
-      superAdminUser,
+      executionUser,
       startIndex,
       existingOutputs,
       buildExecutionOrderHelper,

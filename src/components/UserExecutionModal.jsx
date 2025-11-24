@@ -1699,7 +1699,7 @@ const UserExecutionModal = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 bg-black/80 backdrop-blur-xl z-50 flex items-center justify-center p-4"
-          onClick={onClose}
+          // IMPORTANT: Do NOT close on backdrop click – prevents accidental loss of execution view
         >
           {/* Confetti for completion */}
           {showConfetti && (
@@ -1836,12 +1836,17 @@ const UserExecutionModal = ({
                          '🚀 Generating Content...'}
                       </motion.h3>
                       <motion.p 
-                        className="text-lg text-gray-300"
+                        className="text-lg text-gray-300 flex items-center gap-2"
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.3 }}
                       >
-                        {executionData?.currentNode || 'Initializing...'}
+                        <span>{executionData?.currentNode || 'Initializing...'}</span>
+                        {isChapterMode && totalChapters > 0 && (
+                          <span className="text-sm text-gray-400">
+                            • Chapter {currentChapter}/{totalChapters}
+                          </span>
+                        )}
                       </motion.p>
                       
                       {/* ERROR DETAILS - Show when failed */}
@@ -2174,9 +2179,9 @@ const UserExecutionModal = ({
                   </div>
                 </div>
 
-                {/* Dynamic Progress Bar with Node Names */}
+                {/* Dynamic Progress Bar with Node Names (moved towards top, non-sticky) */}
                 {(executionData?.status === 'running' || executionData?.status === 'failed' || executionData?.error) && (
-                  <div className="px-8 py-4 sticky top-28 z-20 backdrop-blur-md bg-black/20">
+                  <div className="px-8 py-4">
                     <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-4 border border-gray-700/50">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="text-white font-semibold">Current Process</h4>
@@ -2214,151 +2219,6 @@ const UserExecutionModal = ({
                     </div>
                   </div>
                 )}
-
-                {/* Header with Progress Info (Sticky) */}
-                <div className="flex items-center justify-between p-6 border-b border-white/10 sticky top-0 z-30 bg-[#0b1120]/80 backdrop-blur-md">
-                  <div className="flex items-center gap-4">
-                    {/* SEXY AS FUCK Progress Circle */}
-                    <div className="relative w-20 h-20">
-                      {/* Outer Glow Ring */}
-                      <motion.div
-                        className="absolute inset-0 rounded-full blur-xl"
-                        style={{
-                          background: `radial-gradient(circle, ${getStatusColor()}60, transparent 70%)`,
-                        }}
-                        animate={{
-                          scale: [1, 1.2, 1],
-                          opacity: [0.4, 0.8, 0.4]
-                        }}
-                        transition={{
-                          duration: 2,
-                          repeat: Infinity
-                        }}
-                      />
-                      
-                      <svg className="w-20 h-20 transform -rotate-90 relative z-10">
-                        <defs>
-                          <linearGradient id="sexyProgressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stopColor={getStatusColor()} />
-                            <stop offset="50%" stopColor={currentSegment.color} />
-                            <stop offset="100%" stopColor={getStatusColor()} />
-                          </linearGradient>
-                        </defs>
-                        
-                        {/* Background Circle */}
-                        <circle
-                          cx="40"
-                          cy="40"
-                          r="32"
-                          stroke="rgba(255, 255, 255, 0.15)"
-                          strokeWidth="6"
-                          fill="none"
-                        />
-                        
-                        {/* Sexy Progress Circle */}
-                        <motion.circle
-                          cx="40"
-                          cy="40"
-                          r="32"
-                          stroke="url(#sexyProgressGradient)"
-                          strokeWidth="6"
-                          fill="none"
-                          strokeLinecap="round"
-                          initial={{ strokeDashoffset: 201 }}
-                          animate={{ 
-                            strokeDashoffset: 201 - (201 * progress) / 100,
-                          }}
-                          style={{
-                            strokeDasharray: 201,
-                            filter: `drop-shadow(0 0 15px ${getStatusColor()}) drop-shadow(0 0 30px ${getStatusColor()}40)`,
-                          }}
-                          transition={{ duration: 1, ease: 'easeOut' }}
-                        />
-                      </svg>
-                      
-                      {/* Center Content */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <motion.div
-                          key={`progress-${progress}-${executionData?.status}`}
-                          initial={{ scale: 1.3, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          transition={{ duration: 0.5, ease: 'easeOut' }}
-                          className="text-lg font-black text-white"
-                          style={{
-                            textShadow: `0 0 10px ${getStatusColor()}`,
-                            backgroundImage: `linear-gradient(135deg, ${getStatusColor()}, ${currentSegment.color})`,
-                            backgroundClip: 'text',
-                            WebkitBackgroundClip: 'text',
-                            WebkitTextFillColor: 'transparent'
-                          }}
-                        >
-                          {Math.round(progress)}%
-                        </motion.div>
-                        {executionData?.status === 'running' && (
-                          <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                            className="text-xs"
-                          >
-                            ⚡
-                          </motion.div>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <motion.h3 
-                        className="text-xl font-bold text-white mb-1"
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.2 }}
-                      >
-                        {executionData?.status === 'completed' ? '✨ Content Generated!' :
-                         executionData?.status === 'failed' ? '❌ Generation Failed' :
-                         executionData?.status === 'cancelling' ? '⏹️ Stopping...' :
-                         executionData?.status === 'cancelled' ? '⏹️ Cancelled' :
-                         '🚀 Generating Content...'}
-                      </motion.h3>
-                      <motion.p 
-                        className="text-sm text-gray-300"
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.3 }}
-                      >
-                        {executionData?.currentNode || 'Initializing...'}
-                      </motion.p>
-                      
-                      {/* Chapter Progress Indicator */}
-                      {totalNodes > 1 && (
-                        <motion.div 
-                          className="flex items-center gap-2 mt-1"
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.4 }}
-                        >
-                          <div className="text-xs font-medium text-gray-400">
-                            {isChapterMode ? `Chapter ${currentChapter}/${totalChapters}` : `Step ${currentChapter}/${totalChapters}`}
-                          </div>
-                        </motion.div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-200">
-                      <Zap className="h-4 w-4 text-emerald-300" />
-                      {totalTokens.toLocaleString()} tokens
-                    </span>
-                  <motion.button
-                    whileHover={{ scale: 1.1, rotate: 90 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={onClose}
-                    className="p-3 rounded-2xl hover:bg-white/10 transition-all duration-300 text-gray-400 hover:text-white"
-                  >
-                    <X className="w-6 h-6" />
-                  </motion.button>
-                  </div>
-                </div>
 
                 {/* Comprehensive Stats + AI Terminal Section */}
                 <div className="px-8 pb-8 flex-shrink-0">
@@ -2651,28 +2511,30 @@ const UserExecutionModal = ({
                     </motion.div>
                   )}
                   
-                  {/* Re-Run (Edit) - Always available */}
-                  <motion.div 
-                    whileHover={{ scale: 1.05 }} 
-                    whileTap={{ scale: 0.95 }}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.33 }}
-                  >
-                    <UltraButton
-                      onClick={openReRunWithPrefill}
-                      variant="secondary"
-                      icon={Edit3}
-                      className="px-6 py-4 text-lg font-bold"
-                      style={{
-                        background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                        border: 'none',
-                        boxShadow: '0 8px 32px rgba(99, 102, 241, 0.3)'
-                      }}
+                  {/* Re-Run (Edit) – only after the current execution has finished (completed/failed/cancelled) */}
+                  {['completed', 'failed', 'cancelled'].includes(executionData?.status || '') && (
+                    <motion.div 
+                      whileHover={{ scale: 1.05 }} 
+                      whileTap={{ scale: 0.95 }}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.33 }}
                     >
-                      Re-Run (Edit)
-                    </UltraButton>
-                  </motion.div>
+                      <UltraButton
+                        onClick={openReRunWithPrefill}
+                        variant="secondary"
+                        icon={Edit3}
+                        className="px-6 py-4 text-lg font-bold"
+                        style={{
+                          background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                          border: 'none',
+                          boxShadow: '0 8px 32px rgba(99, 102, 241, 0.3)'
+                        }}
+                      >
+                        Re-Run (Edit)
+                      </UltraButton>
+                    </motion.div>
+                  )}
                   
                   {/* Stop Button - Show for running, failed, or error states */}
                   {(executionData?.status === 'running' || executionData?.status === 'failed' || executionData?.error) && (
@@ -2884,7 +2746,7 @@ const UserExecutionModal = ({
       )}
       
       {/* Re-Run Generate Modal */}
-      <AnimatePresence>
+      <AnimatePresence key="re-run-generate-modal">
         {showReRunModal && reRunEngine && (
           <GenerateModal
             isOpen={showReRunModal}
@@ -2898,7 +2760,7 @@ const UserExecutionModal = ({
           />
         )}
       </AnimatePresence>
-      <AnimatePresence>
+      <AnimatePresence key="improvise-instructions-modal">
         {showImproviseModal && (
           <motion.div
             className="fixed inset-0 z-[2500] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4"
@@ -3031,6 +2893,7 @@ const UserExecutionModal = ({
 
       {/* AI Thinking Modal */}
       <AIThinkingModal
+        key="ai-thinking-modal"
         isOpen={showAIThinkingModal}
         onClose={() => setShowAIThinkingModal(false)}
         executionData={executionData}
@@ -3040,6 +2903,7 @@ const UserExecutionModal = ({
       
       {/* 👑 FIXED: User Book Editor Modal */}
       <UserBookEditorModal
+        key="user-book-editor-modal"
         isOpen={showBookEditor}
         onClose={() => setShowBookEditor(false)}
         bookData={bookEditorData}

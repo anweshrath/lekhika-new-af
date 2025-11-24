@@ -1718,8 +1718,16 @@ const AIThinkingModal = ({
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                       >
-                        <div className="text-white/60 text-lg mb-2">No processing steps available</div>
-                        <div className="text-white/40 text-sm">Start a workflow to see AI processing steps</div>
+                        <div className="text-white/60 text-lg mb-2">
+                          {executionData?.status === 'running'
+                            ? 'Workflow is initializing…'
+                            : 'No processing steps available'}
+                        </div>
+                        <div className="text-white/40 text-sm">
+                          {executionData?.status === 'running'
+                            ? 'AI is setting up the story blueprint and first node.'
+                            : 'Start a workflow to see AI processing steps'}
+                        </div>
                       </motion.div>
                     )}
                               </motion.div>

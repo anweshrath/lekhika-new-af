@@ -350,6 +350,60 @@ const getExecutionStatus = async (req: Request, executionId: string) => {
   try {
     const keyData = await validateRequest(req)
     
+    // SURGICAL: Poll worker API first (for running executions - no DB load)
+    const workerUrl = Deno.env.get('EXECUTION_WORKER_URL') || 'http://localhost:3001'
+    const internalSecret = Deno.env.get('INTERNAL_API_SECRET') || 'dev-secret-key'
+    
+    try {
+      const workerResponse = await fetch(`${workerUrl}/status/${executionId}`, {
+        method: 'GET',
+        headers: {
+          'X-Internal-Auth': internalSecret
+        }
+      })
+      
+      if (workerResponse.ok) {
+        const workerData = await workerResponse.json()
+        const workerStatus = workerData.status
+        
+        // If worker has the execution (running or just completed), return it
+        if (workerStatus && workerStatus.status !== 'not_found') {
+          console.log(`✅ Got status from worker for ${executionId}:`, workerStatus.status)
+          
+          // Map worker status format to frontend format
+          return createResponse(200, {
+            executionId: executionId,
+            status: workerStatus.status,
+            executionData: {
+              status: workerStatus.status,
+              progress: workerStatus.progress || 0,
+              currentNode: workerStatus.currentNode || null,
+              currentNodeId: workerStatus.currentNodeId || null,
+              nodeResults: workerStatus.nodeResults || {},
+              processingSteps: workerStatus.processingSteps || [],
+              storyContext: workerStatus.storyContext || null,
+              tokens: workerStatus.tokens || 0,
+              cost: workerStatus.cost || 0,
+              words: workerStatus.words || 0,
+              chaptersGenerated: workerStatus.chaptersGenerated || 0,
+              error: workerStatus.error || null,
+              checkpointData: workerStatus.checkpointData || null
+            },
+            metadata: {
+              progress: workerStatus.progress || 0,
+              tokens: workerStatus.tokens || 0,
+              words: workerStatus.words || 0,
+              error: workerStatus.error || null
+            }
+          })
+        }
+      }
+    } catch (workerError) {
+      // Worker not available or execution not in memory - fall back to DB
+      console.log(`⚠️ Worker status check failed for ${executionId}, falling back to DB:`, workerError.message)
+    }
+    
+    // FALLBACK: Query DB for completed/failed executions (only when worker doesn't have it)
     const { data: execution, error } = await supabase
       .from('engine_executions')
       .select('*')
@@ -529,7 +583,8 @@ const resumeExecution = async (req: Request, engineId: string) => {
       userEngineId, 
       userId, 
       nodes, 
-      edges 
+      edges,
+      regenerateContext // SURGICAL: Forward user guidance for failed node retry
     } = requestBody
     
     if (!executionId || !nodes || !edges) {
@@ -552,7 +607,8 @@ const resumeExecution = async (req: Request, engineId: string) => {
         userId: userId || keyData.user_id,
         workflow: { nodes, edges },
         inputs: {},
-        options: {}
+        options: {},
+        regenerateContext: regenerateContext // SURGICAL: Forward user guidance to worker
       })
     })
     

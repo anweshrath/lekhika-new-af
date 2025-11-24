@@ -1307,34 +1307,16 @@ const GenerateModal = ({
     }
   }
 
-  const closeExecutionModal = async () => {
-    // CRITICAL: Stop the worker execution first
-    if (currentExecutionId) {
-      try {
-        console.log('🛑 Modal closed - stopping worker execution:', currentExecutionId)
-        await handleForceStop()
-      } catch (error) {
-        console.error('Error stopping execution on modal close:', error)
-      }
-    }
-    
-    // Stop polling
+  // NEW: Soft-close/minimize the execution modal without stopping the worker.
+  // Execution keeps running in the background; user can reopen the modal.
+  const closeExecutionModal = () => {
+    // Stop local polling, but DO NOT stop the worker execution.
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current)
       pollingIntervalRef.current = null
     }
     
     setShowExecutionModal(false)
-    setExecutionModalData(null)
-    setCurrentExecutionId(null)
-    setCurrentApiKey(null)
-    
-    // Now close the form modal too
-    onClose()
-    
-    if (onExecutionComplete) {
-      onExecutionComplete()
-    }
   }
 
   const handleForceStop = async () => {
@@ -1378,8 +1360,15 @@ const GenerateModal = ({
           .update({ status: 'cancelled' })
           .eq('id', currentExecutionId)
         
-        toast.success('Stop request sent')
-        // Don't update status here - let polling detect it
+        // Immediately reflect cancelled state in UI so user isn't lied to
+        setExecutionModalData(prev => ({
+          ...prev,
+          status: 'cancelled',
+          message: 'Execution stopped by user'
+        }))
+        // Clear execution id so floating pill disappears
+        setCurrentExecutionId(null)
+        toast.success('Execution stopped')
       } else {
         console.error('❌ Worker stop failed:', response.status)
         toast.error('Failed to stop execution on worker')
@@ -1422,6 +1411,13 @@ const GenerateModal = ({
     }, 500)
   }
 
+  // NEW: Floating execution pill when modal is minimized but execution is still running/known.
+  const shouldShowExecutionPill =
+    currentExecutionId &&
+    !showExecutionModal &&
+    (!executionModalData ||
+      ['running', 'cancelling'].includes(executionModalData.status))
+
   return (
     <>
       {/* Token Limit Exceeded Modal */}
@@ -1447,7 +1443,16 @@ const GenerateModal = ({
                 rgba(15, 23, 42, 0.75))`,
               backdropFilter: 'blur(16px) saturate(150%)'
             }}
-            onClick={onClose}
+            // IMPORTANT: Backdrop click should never kill an in-flight execution – just ignore it.
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              if (currentExecutionId) {
+                handleFormMinimize()
+              } else {
+                onClose()
+              }
+            }}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.8, y: 40, rotateX: -15 }}
@@ -1616,7 +1621,16 @@ const GenerateModal = ({
               </motion.button>
 
               <motion.button
-                onClick={onClose}
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  // If an execution is in-flight or the execution modal is open, treat X as "minimize", not "destroy"
+                  if (currentExecutionId || showExecutionModal) {
+                    handleFormMinimize()
+                  } else {
+                    onClose()
+                  }
+                }}
                 whileHover={{ scale: 1.1, rotate: 90 }}
                 whileTap={{ scale: 0.9 }}
                 className="relative p-2 sm:p-3 rounded-full transition-all duration-300 group"
@@ -2305,6 +2319,29 @@ const GenerateModal = ({
           onMinimizeForm={handleFormMinimize}
           onRestoreForm={handleFormRestore}
         />
+      )}
+
+      {/* NEW: Mini execution status pill when modal is minimized */}
+      {shouldShowExecutionPill && (
+        <motion.div
+          initial={{ opacity: 0, y: 20, x: 20 }}
+          animate={{ opacity: 1, y: 0, x: 0 }}
+          exit={{ opacity: 0, y: 20, x: 20 }}
+          className="fixed bottom-6 right-6 z-40"
+        >
+          <button
+            onClick={() => setShowExecutionModal(true)}
+            className="flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold transition-all duration-200"
+            style={{
+              background: 'linear-gradient(135deg, rgba(30, 64, 175, 0.95), rgba(8, 47, 73, 0.98))',
+              border: '1px solid rgba(191, 219, 254, 0.4)',
+              color: 'white'
+            }}
+          >
+            <Loader2 className="w-4 h-4 animate-spin text-sky-300" />
+            <span>View Running Execution</span>
+          </button>
+        </motion.div>
       )}
     </>
   )

@@ -231,10 +231,11 @@ REFINED CONTENT:`
       }
     }
 
-    if (pipelineData.superAdminUser) {
-      await aiServiceInstance.setUser(pipelineData.superAdminUser)
+    const executionUser = pipelineData.executionUser
+    if (executionUser && executionUser.id) {
+      await aiServiceInstance.setUser(executionUser)
     } else {
-      throw new Error('SuperAdmin user not provided for AI service')
+      throw new Error('Execution user not provided for AI service')
     }
 
     if (!aiServiceInstance.providers[modelConfig.providerName]) {

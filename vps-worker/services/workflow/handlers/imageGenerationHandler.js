@@ -56,11 +56,11 @@ async function executeImageGeneration({
   const modelConfig = await parseModelConfig(selectedModels[0])
   const aiServiceInstance = getAIService(modelConfig.provider)
 
-  if (!pipelineData.superAdminUser) {
-    throw new Error('SuperAdmin user not provided for AI service')
+  const executionUser = pipelineData.executionUser
+  if (!executionUser || !executionUser.id) {
+    throw new Error('Execution user not provided for AI service')
   }
-
-  await aiServiceInstance.setUser(pipelineData.superAdminUser)
+  await aiServiceInstance.setUser(executionUser)
 
   try {
     const imageResult = await aiServiceInstance.generateImage(imagePrompt, {

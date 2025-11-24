@@ -355,17 +355,33 @@ class ExportService {
       rawSections.forEach((section, idx) => {
         if (Array.isArray(section.content)) {
           section.content.forEach(ch => {
+            const title = ch.title || section.title || section.metadata?.title
+            if (!title || !String(title).trim()) {
+              console.warn(`⚠️ Skipping chapter in HTML export (array content) – missing reliable title`)
+              return
+            }
             flatSections.push({
-              title: ch.title || `Chapter ${flatSections.length + 1}`,
+              title: String(title).trim(),
               content: professionalBookFormatter.cleanContent(ch.content || ''),
-              metadata: { chapterNumber: ch.chapter || flatSections.length + 1 }
+              metadata: {
+                chapterNumber: ch.chapter || section.chapterNumber || flatSections.length + 1,
+                ...(section.metadata || {})
+              }
             })
           })
         } else if (typeof section.content === 'string' && section.content.trim()) {
+          const title = section.title || section.metadata?.title
+          if (!title || !String(title).trim()) {
+            console.warn(`⚠️ Skipping section ${idx + 1} in HTML export – missing reliable title`)
+            return
+          }
           flatSections.push({
-            title: section.metadata?.title || `Chapter ${idx + 1}`,
+            title: String(title).trim(),
             content: professionalBookFormatter.cleanContent(section.content),
-            metadata: { chapterNumber: idx + 1 }
+            metadata: {
+              chapterNumber: section.chapterNumber || section.metadata?.chapterNumber || idx + 1,
+              ...(section.metadata || {})
+            }
           })
         }
       })
@@ -916,9 +932,12 @@ class ExportService {
                         compiledContent.userInput?.font_family || 
                         'Georgia, serif'
       
-      // Flatten sections - handle both arrays and strings  
+      // Flatten sections - handle both arrays and strings
+      // Only treat contentType === 'chapter' (or unspecified) as real book chapters
       let flatSections = []
-      const rawSections = compiledContent.sections || []
+      const rawSections = (compiledContent.sections || []).filter(
+        (section) => !section.contentType || section.contentType === 'chapter'
+      )
       
       rawSections.forEach((section, idx) => {
         if (Array.isArray(section.content)) {
@@ -1115,9 +1134,13 @@ class ExportService {
             <h2>Table of Contents</h2>
             <ul>`
       
-      // Build TOC
+      // Build TOC – use actual section titles only, never invented placeholders.
       sections.forEach((section, index) => {
-        const chapterTitle = section.title || section.metadata?.title || `Chapter ${index + 1}`
+        const chapterTitle = section.title && String(section.title).trim()
+        if (!chapterTitle) {
+          console.warn(`⚠️ Skipping TOC entry for section ${index + 1} – missing title`)
+          return
+        }
         const chapterNum = section.metadata?.chapterNumber || (index + 1)
         const chapterId = `chapter-${chapterNum}`
         
@@ -1131,9 +1154,13 @@ class ExportService {
         
         <!-- CHAPTERS -->`
       
-      // Build chapters
+      // Build chapters – rely on structured titles, never fabricate "Chapter N" here.
       sections.forEach((section, index) => {
-        const chapterTitle = section.title || section.metadata?.title || `Chapter ${index + 1}`
+        const chapterTitle = section.title && String(section.title).trim()
+        if (!chapterTitle) {
+          console.warn(`⚠️ Skipping chapter ${index + 1} in HTML export – missing title`)
+          return
+        }
         const chapterNum = section.metadata?.chapterNumber || (index + 1)
         const chapterId = `chapter-${chapterNum}`
         const chapterContent = section.content || ''

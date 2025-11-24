@@ -513,12 +513,19 @@ class ExecutionService {
       
       logger.logExecution(executionId, 'Workflow execution started');
       
+      // SURGICAL: Validate userId before constructing userObject
+      if (!userId) {
+        throw new Error(`Execution user context required - userId is missing for execution ${executionId}`)
+      }
+      
       // Create user object for workflow execution (matches superadmin structure)
       const userObject = {
         id: userId,
         role: 'user',
-        tier: options.tier || 'hobby'
+        tier: options?.tier || 'hobby'
       };
+      
+      logger.info(`✅ Constructed executionUser:`, { id: userObject.id, role: userObject.role, tier: userObject.tier });
       
       // Progress callback to update execution status with complete data
       const progressCallback = async (update) => {
@@ -707,6 +714,7 @@ class ExecutionService {
       
       // Execute using the REAL workflowExecutionService from superadmin
       logger.info(`🚀 Executing workflow with ${workflow.nodes.length} nodes`);
+      logger.info(`✅ Passing executionUser to workflowExecutionService:`, { id: userObject.id, role: userObject.role, tier: userObject.tier });
       
       const result = await workflowExecutionService.executeWorkflow(
         workflow.nodes,
@@ -714,8 +722,7 @@ class ExecutionService {
         inputs,
         executionId,
         progressCallback,
-        userObject, // Pass user object (NOT superadmin)
-        executionContext
+        userObject // SURGICAL: Pass user object - this becomes pipelineData.executionUser
       );
       
       logger.info(`✅ Workflow execution completed for ${executionId}`);
@@ -1392,14 +1399,31 @@ class ExecutionService {
       return { status: 'not_found' };
     }
     
+    // SURGICAL: Return full execution data for frontend polling (no DB needed)
+    const executionData = execution.executionData || {};
+    const processingSteps = execution.processingSteps || executionData.processingSteps || [];
+    
     return {
-      status: execution.status,
+      status: execution.status || executionData.status || 'running',
       startTime: execution.startTime,
       endTime: execution.endTime,
       duration: execution.endTime 
         ? execution.endTime - (execution.startTime || Date.now())
         : Date.now() - (execution.startTime || 0),
-      error: execution.error
+      error: execution.error || executionData.error,
+      // SURGICAL: Include full execution data for frontend (from memory, no DB)
+      progress: executionData.progress || 0,
+      currentNode: executionData.currentNode || null,
+      currentNodeId: executionData.currentNodeId || null,
+      nodeResults: executionData.nodeResults || {},
+      processingSteps: processingSteps,
+      storyContext: executionData.storyContext || execution.storyContext || null,
+      tokens: executionData.tokens || 0,
+      cost: executionData.cost || 0,
+      words: executionData.words || 0,
+      chaptersGenerated: executionData.chaptersGenerated || 0,
+      // Include checkpoint data if available (for resume)
+      checkpointData: executionData.checkpointData || null
     };
   }
 }

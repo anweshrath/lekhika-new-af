@@ -8,6 +8,7 @@ const { initializeSupabase } = require('./services/supabase');
 const executionService = require('./services/executionService');
 const healthService = require('./services/healthService');
 const analyticsAggregator = require('./services/analyticsAggregator');
+const queue = require('./services/queue');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -78,7 +79,16 @@ app.post('/execute', async (req, res) => {
       options 
     } = req.body;
     
-    if (!executionId || !lekhikaApiKey || !userEngineId || !masterEngineId || !userId || !workflow || !inputs) {
+    // SURGICAL: Validate userId explicitly - critical for executionUser construction
+    if (!userId) {
+      logger.error('❌ userId is missing in /execute request:', { executionId, hasUserId: !!userId });
+      return res.status(400).json({
+        error: 'Missing required parameter: userId',
+        required: ['executionId', 'lekhikaApiKey', 'userEngineId', 'masterEngineId', 'userId', 'workflow', 'inputs']
+      });
+    }
+    
+    if (!executionId || !lekhikaApiKey || !userEngineId || !masterEngineId || !workflow || !inputs) {
       logger.warn('Missing required parameters for execution:', { 
         executionId, 
         lekhikaApiKey: !!lekhikaApiKey, 
@@ -96,7 +106,29 @@ app.post('/execute', async (req, res) => {
 
     logger.info(`🚀 Starting execution ${executionId} for user ${userId} with Lekhika API key ${lekhikaApiKey}`);
 
-    // Execute the workflow
+    const queueEnabled = String(process.env.QUEUE_ENABLED || 'false').toLowerCase() === 'true';
+
+    if (queueEnabled) {
+      // Enqueue job for asynchronous processing by queueWorker
+      await queue.enqueue('workflow.execute', {
+        executionId,
+        lekhikaApiKey,
+        userEngineId,
+        masterEngineId,
+        userId,
+        workflow,
+        inputs,
+        options
+      }, { jobId: executionId });
+
+      return res.json({
+        success: true,
+        queued: true,
+        executionId
+      });
+    }
+
+    // Direct execution path (queue disabled) - preserves existing behavior
     const result = await executionService.executeWorkflow({
       executionId,
       lekhikaApiKey,
@@ -108,7 +140,7 @@ app.post('/execute', async (req, res) => {
       options
     });
 
-    res.json({
+    return res.json({
       success: true,
       executionId,
       result
@@ -127,6 +159,17 @@ app.post('/execute', async (req, res) => {
 // Status endpoint for specific execution
 app.get('/status/:executionId', async (req, res) => {
   try {
+    // SURGICAL: Validate internal auth for Edge Function calls
+    const internalAuth = req.headers['x-internal-auth']
+    const expectedSecret = process.env.INTERNAL_API_SECRET || 'dev-secret-key'
+    
+    if (internalAuth !== expectedSecret) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized - invalid internal auth'
+      })
+    }
+    
     const { executionId } = req.params;
     const status = await executionService.getExecutionStatus(executionId);
     
@@ -172,12 +215,13 @@ app.post('/stop/:executionId', async (req, res) => {
 // CRITICAL: Match execute endpoint pattern (no engineId in URL - handled by Edge Function)
 app.post('/resume', async (req, res) => {
   try {
-    const { executionId, nodes: bodyNodes, edges: bodyEdges, workflow } = req.body;
+    const { executionId, nodes: bodyNodes, edges: bodyEdges, workflow, regenerateContext } = req.body;
     const nodes = bodyNodes || workflow?.nodes;
     const edges = bodyEdges || workflow?.edges;
     logger.info(`🔄 Resume request received for execution ${executionId}`);
     logger.info(`🔍 Request body keys:`, Object.keys(req.body));
     logger.info(`🔍 Has nodes:`, !!nodes, `Has edges:`, !!edges);
+    logger.info(`🔍 Has regenerateContext:`, !!regenerateContext, `Has manualInstruction:`, !!regenerateContext?.manualInstruction);
     
     if (!executionId) {
       return res.status(400).json({
@@ -202,18 +246,56 @@ app.post('/resume', async (req, res) => {
     // Call workflowExecutionService.resumeExecution
     const workflowExecutionService = require('./services/workflowExecutionService');
     
-    // Progress callback to update database
+    // SURGICAL: Set status to 'running' immediately so frontend knows to poll
+    try {
+      await executionService.updateExecutionStatus(executionId, 'running', {
+        status: 'running',
+        message: 'Resuming execution from checkpoint...',
+        resumed: true
+      });
+      logger.info(`✅ Set execution ${executionId} status to 'running' for resume`);
+    } catch (statusError) {
+      logger.warn(`⚠️ Failed to set status to 'running' at resume start:`, statusError.message);
+      // Continue anyway - progress callback will try again
+    }
+    
+    // SURGICAL: Progress callback to update database (same as /execute endpoint)
     const progressCallback = async (update) => {
       logger.info(`📊 Resume progress: ${JSON.stringify(update)}`);
-      // Update is handled by workflowExecutionService internally
+      // Update execution status in DB so frontend polling can see progress
+      try {
+        await executionService.updateExecutionStatus(executionId, 'running', update);
+      } catch (updateError) {
+        logger.warn(`⚠️ Failed to update execution status during resume:`, updateError.message);
+        // Don't throw - resume should continue even if DB update fails
+      }
     };
     
+    // SURGICAL: Pass regenerateContext to resumeExecution so user guidance can be applied
     const result = await workflowExecutionService.resumeExecution(
       executionId,
       nodes,
       edges,
-      progressCallback
+      progressCallback,
+      regenerateContext // Pass user guidance/instructions for failed node retry
     );
+    
+    // SURGICAL: Handle error result from resume (don't return success: true if it failed)
+    if (result && result.success === false) {
+      logger.error(`❌ Resume failed: ${result.error}`, {
+        executionId,
+        failedAtNode: result.failedAtNode,
+        fullError: result.fullError
+      });
+      return res.status(500).json({
+        success: false,
+        error: result.error,
+        fullError: result.fullError,
+        failedAtNode: result.failedAtNode,
+        failedNodeName: result.failedNodeName,
+        executionId
+      });
+    }
     
     res.json({
       success: true,
@@ -285,6 +367,7 @@ app.get('/status', async (req, res) => {
     const activeExecutions = executionService.activeExecutions.size;
     const maxConcurrent = executionService.maxConcurrent;
     const isHealthy = activeExecutions < maxConcurrent;
+    const activeExecutionIds = Array.from(executionService.activeExecutions.keys());
     
     res.json({
       success: true,
@@ -292,12 +375,271 @@ app.get('/status', async (req, res) => {
       activeExecutions,
       maxConcurrent,
       capacity: `${activeExecutions}/${maxConcurrent}`,
+      activeExecutionIds,
       uptime: process.uptime(),
       memoryUsage: process.memoryUsage()
     });
   } catch (error) {
     logger.error('Status check failed:', error);
     res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Queue stats endpoint (admin / monitoring)
+app.get('/queue/stats', async (req, res) => {
+  try {
+    const queueEnabled = String(process.env.QUEUE_ENABLED || 'false').toLowerCase() === 'true';
+
+    if (!queueEnabled) {
+      return res.json({
+        success: true,
+        enabled: false,
+        message: 'Queue system disabled (QUEUE_ENABLED=false)'
+      });
+    }
+
+    const adapter = queue;
+    const stats = {};
+
+    if (adapter && typeof adapter.getQueueStats === 'function') {
+      Object.assign(stats, await adapter.getQueueStats());
+    }
+
+    return res.json({
+      success: true,
+      enabled: true,
+      stats
+    });
+  } catch (error) {
+    logger.error('Queue stats failed:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Retry a failed execution by executionId (admin-only usage)
+app.post('/queue/retry/:executionId', async (req, res) => {
+  try {
+    const queueEnabled = String(process.env.QUEUE_ENABLED || 'false').toLowerCase() === 'true';
+    if (!queueEnabled) {
+      return res.status(400).json({
+        success: false,
+        error: 'Queue system disabled'
+      });
+    }
+
+    const { executionId } = req.params;
+    await queue.retry(executionId);
+
+    return res.json({
+      success: true,
+      executionId,
+      message: 'Retry requested'
+    });
+  } catch (error) {
+    logger.error('Queue retry failed:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Pause the queue (admin-only usage)
+app.post('/queue/pause', async (req, res) => {
+  try {
+    const queueEnabled = String(process.env.QUEUE_ENABLED || 'false').toLowerCase() === 'true';
+    if (!queueEnabled) {
+      return res.status(400).json({
+        success: false,
+        error: 'Queue system disabled'
+      });
+    }
+
+    await queue.pause();
+    return res.json({
+      success: true,
+      message: 'Queue paused'
+    });
+  } catch (error) {
+    logger.error('Queue pause failed:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Resume the queue (admin-only usage)
+app.post('/queue/resume', async (req, res) => {
+  try {
+    const queueEnabled = String(process.env.QUEUE_ENABLED || 'false').toLowerCase() === 'true';
+    if (!queueEnabled) {
+      return res.status(400).json({
+        success: false,
+        error: 'Queue system disabled'
+      });
+    }
+
+    await queue.resume();
+    return res.json({
+      success: true,
+      message: 'Queue resumed'
+    });
+  } catch (error) {
+    logger.error('Queue resume failed:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Cancel a queued execution by executionId (admin-only usage)
+app.post('/queue/cancel/:executionId', async (req, res) => {
+  try {
+    const queueEnabled = String(process.env.QUEUE_ENABLED || 'false').toLowerCase() === 'true';
+    if (!queueEnabled) {
+      return res.status(400).json({
+        success: false,
+        error: 'Queue system disabled'
+      });
+    }
+
+    const { executionId } = req.params;
+    await queue.cancel(executionId);
+
+    return res.json({
+      success: true,
+      executionId,
+      message: 'Queue job cancelled (if it existed)'
+    });
+  } catch (error) {
+    logger.error('Queue cancel failed:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Clear failed jobs from the queue (admin-only usage)
+app.post('/queue/clear/failed', async (req, res) => {
+  try {
+    const queueEnabled = String(process.env.QUEUE_ENABLED || 'false').toLowerCase() === 'true';
+    if (!queueEnabled) {
+      return res.status(400).json({
+        success: false,
+        error: 'Queue system disabled'
+      });
+    }
+
+    const cleared = await queue.clearFailed();
+    return res.json({
+      success: true,
+      cleared,
+      message: `Cleared ${cleared} failed jobs`
+    });
+  } catch (error) {
+    logger.error('Queue clear failed jobs failed:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Clear delayed jobs from the queue (admin-only usage)
+app.post('/queue/clear/delayed', async (req, res) => {
+  try {
+    const queueEnabled = String(process.env.QUEUE_ENABLED || 'false').toLowerCase() === 'true';
+    if (!queueEnabled) {
+      return res.status(400).json({
+        success: false,
+        error: 'Queue system disabled'
+      });
+    }
+
+    const cleared = await queue.clearDelayed();
+    return res.json({
+      success: true,
+      cleared,
+      message: `Cleared ${cleared} delayed jobs`
+    });
+  } catch (error) {
+    logger.error('Queue clear delayed jobs failed:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Clear waiting jobs from the queue (admin-only usage)
+app.post('/queue/clear/waiting', async (req, res) => {
+  try {
+    const queueEnabled = String(process.env.QUEUE_ENABLED || 'false').toLowerCase() === 'true';
+    if (!queueEnabled) {
+      return res.status(400).json({
+        success: false,
+        error: 'Queue system disabled'
+      });
+    }
+
+    if (typeof queue.clearWaiting !== 'function') {
+      return res.status(500).json({
+        success: false,
+        error: 'clearWaiting not implemented for current queue adapter'
+      });
+    }
+
+    const cleared = await queue.clearWaiting();
+    return res.json({
+      success: true,
+      cleared,
+      message: `Cleared ${cleared} waiting jobs`
+    });
+  } catch (error) {
+    logger.error('Queue clear waiting jobs failed:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Hard reset queue: clear waiting, delayed, and failed jobs (admin-only usage)
+app.post('/queue/reset', async (req, res) => {
+  try {
+    const queueEnabled = String(process.env.QUEUE_ENABLED || 'false').toLowerCase() === 'true';
+    if (!queueEnabled) {
+      return res.status(400).json({
+        success: false,
+        error: 'Queue system disabled'
+      });
+    }
+
+    if (typeof queue.resetAll !== 'function') {
+      return res.status(500).json({
+        success: false,
+        error: 'resetAll not implemented for current queue adapter'
+      });
+    }
+
+    const result = await queue.resetAll();
+    return res.json({
+      success: true,
+      message: 'Queue hard reset applied – waiting, delayed, and failed jobs cleared',
+      ...result
+    });
+  } catch (error) {
+    logger.error('Queue reset failed:', error);
+    return res.status(500).json({
       success: false,
       error: error.message
     });

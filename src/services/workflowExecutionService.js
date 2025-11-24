@@ -546,13 +546,13 @@ class WorkflowExecutionService {
    * @param {Function} progressCallback - Progress update callback
    * @returns {Object} Final workflow output
    */
-  async executeWorkflow(nodes, edges, initialInput, workflowId, progressCallback = null, superAdminUser = null) {
+  async executeWorkflow(nodes, edges, initialInput, workflowId, progressCallback = null, executionUser = null) {
     const startTime = Date.now() // DEFINE START TIME FOR EXECUTION TRACKING
     
     try {
-      // Validate SuperAdmin authentication
-      if (!superAdminUser || !superAdminUser.id) {
-        throw new Error('SuperAdmin authentication required for workflow execution')
+      // Validate execution user context
+      if (!executionUser || !executionUser.id) {
+        throw new Error('Execution user context required for workflow execution')
       }
 
       // Initialize execution state
@@ -572,7 +572,7 @@ class WorkflowExecutionService {
       let pipelineData = {
         userInput: initialInput,
         nodeOutputs: {},
-        superAdminUser: superAdminUser,
+        executionUser: executionUser,
         metadata: {
           workflowId,
           executionTime: new Date(),
@@ -1595,8 +1595,8 @@ CUSTOM INSTRUCTIONS: ${allData.custom_instructions || 'Generate comprehensive, p
       
       // Set SuperAdmin user in aiService to load API keys from database FIRST
       // The SuperAdmin user should be passed from the calling component
-      if (pipelineData.superAdminUser) {
-        await aiServiceInstance.setUser(pipelineData.superAdminUser)
+      if (pipelineData.executionUser) {
+        await aiServiceInstance.setUser(pipelineData.executionUser)
       } else {
         throw new Error('SuperAdmin user not provided for AI service')
       }
@@ -2099,8 +2099,8 @@ INSTRUCTIONS:
 REFINED CONTENT:`
 
       // Set SuperAdmin user in aiService
-      if (pipelineData.superAdminUser) {
-        await aiServiceInstance.setUser(pipelineData.superAdminUser)
+      if (pipelineData.executionUser) {
+        await aiServiceInstance.setUser(pipelineData.executionUser)
       } else {
         throw new Error('SuperAdmin user not provided for AI service')
       }
@@ -2244,8 +2244,8 @@ REFINED CONTENT:`
     const aiServiceInstance = this.getAIService(modelConfig.provider)
     
     // Set SuperAdmin user in aiService to load API keys from database
-    if (pipelineData.superAdminUser) {
-      await aiServiceInstance.setUser(pipelineData.superAdminUser)
+    if (pipelineData.executionUser) {
+      await aiServiceInstance.setUser(pipelineData.executionUser)
     } else {
       throw new Error('SuperAdmin user not provided for AI service')
     }
@@ -3147,8 +3147,8 @@ Respond with ONLY a single number (e.g., "5" or "6"). No explanation needed.`
       const aiServiceInstance = this.getAIService(modelConfig.provider)
       
       // Set SuperAdmin user if available
-      if (pipelineData?.superAdminUser) {
-        await aiServiceInstance.setUser(pipelineData.superAdminUser)
+      if (pipelineData?.executionUser) {
+        await aiServiceInstance.setUser(pipelineData.executionUser)
       }
       
       const response = await aiServiceInstance.generateContent({
@@ -4277,7 +4277,7 @@ Respond with ONLY a single number (e.g., "5" or "6"). No explanation needed.`
   }
 
   // Restart workflow execution from a checkpoint (for UI resume buttons)
-  async restartFromCheckpoint(workflowId, nodeId, nodes, edges, initialInput, progressCallback, superAdminUser) {
+  async restartFromCheckpoint(workflowId, nodeId, nodes, edges, initialInput, progressCallback, executionUser) {
     console.log(`🔄 Restarting workflow ${workflowId} from checkpoint ${nodeId}`)
     
     try {
@@ -4287,7 +4287,7 @@ Respond with ONLY a single number (e.g., "5" or "6"). No explanation needed.`
       if (!checkpoint) {
         // If no checkpoint, try to resume from the failed node by restarting it
         console.log(`⚠️ No checkpoint found for node ${nodeId}, attempting to restart failed node`)
-        return await this.restartFailedNode(workflowId, nodeId, nodes, edges, initialInput, progressCallback, superAdminUser)
+        return await this.restartFailedNode(workflowId, nodeId, nodes, edges, initialInput, progressCallback, executionUser)
       }
       
       // Restore the execution state from checkpoint
@@ -4316,7 +4316,7 @@ Respond with ONLY a single number (e.g., "5" or "6"). No explanation needed.`
         edges, 
         initialInput, 
         progressCallback, 
-        superAdminUser,
+        executionUser,
         nodeIndex + 1, // Start from next node
         checkpoint.state.nodeOutputs || {}
       )
@@ -4328,7 +4328,7 @@ Respond with ONLY a single number (e.g., "5" or "6"). No explanation needed.`
   }
 
   // Restart a failed node specifically
-  async restartFailedNode(workflowId, nodeId, nodes, edges, initialInput, progressCallback, superAdminUser) {
+  async restartFailedNode(workflowId, nodeId, nodes, edges, initialInput, progressCallback, executionUser) {
     console.log(`🔄 Restarting failed node ${nodeId} in workflow ${workflowId}`)
     
     try {
@@ -4365,7 +4365,7 @@ Respond with ONLY a single number (e.g., "5" or "6"). No explanation needed.`
       })
       
       // Execute the specific node
-      const result = await this.executeNode(nodeToRestart, pipelineData, progressCallback, workflowId, superAdminUser)
+      const result = await this.executeNode(nodeToRestart, pipelineData, progressCallback, workflowId, executionUser)
       
       if (result.success) {
         // Update the execution state with the successful result
@@ -4381,7 +4381,7 @@ Respond with ONLY a single number (e.g., "5" or "6"). No explanation needed.`
         console.log(`✅ Successfully restarted node ${nodeId}`)
         
         // Try to continue with the next nodes
-        return await this.continueWorkflowFromNode(workflowId, nodeId, nodes, edges, initialInput, progressCallback, superAdminUser)
+        return await this.continueWorkflowFromNode(workflowId, nodeId, nodes, edges, initialInput, progressCallback, executionUser)
       } else {
         throw new Error(result.error || 'Node execution failed')
       }
@@ -4393,7 +4393,7 @@ Respond with ONLY a single number (e.g., "5" or "6"). No explanation needed.`
   }
 
   // Continue workflow execution from a specific node
-  async continueWorkflowFromNode(workflowId, fromNodeId, nodes, edges, initialInput, progressCallback, superAdminUser) {
+  async continueWorkflowFromNode(workflowId, fromNodeId, nodes, edges, initialInput, progressCallback, executionUser) {
     console.log(`▶️ Continuing workflow ${workflowId} from node ${fromNodeId}`)
     
     try {
@@ -4410,9 +4410,9 @@ Respond with ONLY a single number (e.g., "5" or "6"). No explanation needed.`
         workflowId,
         nodes,
         edges,
-        initialInput,
-        progressCallback,
-        superAdminUser,
+        initialInput, 
+        progressCallback, 
+        executionUser,
         fromNodeIndex + 1,
         this.executionState.get(workflowId)?.nodeOutputs || {}
       )
@@ -4424,7 +4424,7 @@ Respond with ONLY a single number (e.g., "5" or "6"). No explanation needed.`
   }
 
   // Continue execution from a specific node index
-  async continueExecutionFromNode(workflowId, nodes, edges, initialInput, progressCallback, superAdminUser, startIndex, existingOutputs) {
+  async continueExecutionFromNode(workflowId, nodes, edges, initialInput, progressCallback, executionUser, startIndex, existingOutputs) {
     console.log(`🔄 Continuing execution from node index ${startIndex}`)
     
     const executionOrder = this.getExecutionOrder(nodes, edges)

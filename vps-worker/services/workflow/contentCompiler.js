@@ -130,7 +130,9 @@ function compileWorkflowContent(nodeOutputs, userInput) {
       foreword: null,
       introduction: null,
       tableOfContents: null,
-      chapterTitles: {} // SURGICAL FIX: Store chapter titles from structural nodes
+      // SURGICAL FIX: Store canonical chapter titles from structural nodes (Story Architect)
+      // Keyed by chapterNumber (1-based). This is the single source of truth for titles.
+      chapterTitles: {}
     },
     assets: {
       images: [],
@@ -200,7 +202,14 @@ function compileWorkflowContent(nodeOutputs, userInput) {
                 toc.chapters.forEach(ch => {
                   const num = ch.number || ''
                   const title = ch.title || ''
-                  if (title) tocLines.push(`${num ? `${num}. ` : ''}${title}`)
+                  if (!title) return
+
+                  // Populate canonical structural chapter title map
+                  if (typeof num === 'number' && num > 0) {
+                    content.structural.chapterTitles[num] = title
+                  }
+
+                  tocLines.push(`${num ? `${num}. ` : ''}${title}`)
                 })
               }
               if (Array.isArray(toc.additional_sections)) {
@@ -332,20 +341,20 @@ function compileWorkflowContent(nodeOutputs, userInput) {
                   }
                 }
                 
-                // Final fallback - use chapter number only, NO placeholders
+                // Final fallback - leave empty if no valid title (downstream filters will handle)
                 if (!chapterTitle || !chapterTitle.trim() || chapterTitle.toLowerCase().includes('content writer')) {
-                  chapterTitle = `Chapter ${chNum}`
-                  console.warn(`⚠️ Chapter ${chNum} has no valid title - using fallback`)
+                  console.warn(`⚠️ Chapter ${chNum} has no reliable title – leaving title empty for downstream filters`)
+                  chapterTitle = '' // downstream exporters decide whether to skip or label explicitly
                 }
               }
             } else if (chapterTitle.toLowerCase().includes('content writer')) {
-              // Replace "Content Writer" placeholder with structural title or fallback
+              // Replace "Content Writer" placeholder with structural title or leave empty
               if (content.structural.chapterTitles && content.structural.chapterTitles[chNum]) {
                 chapterTitle = content.structural.chapterTitles[chNum]
                 console.log(`📐 Replaced "Content Writer" with structural title: "${chapterTitle}"`)
               } else {
-                chapterTitle = `Chapter ${chNum}`
-                console.warn(`⚠️ Replaced "Content Writer" placeholder for chapter ${chNum}`)
+                console.warn(`⚠️ Chapter ${chNum} has no reliable title – leaving title empty for downstream filters`)
+                chapterTitle = '' // downstream exporters decide whether to skip or label explicitly
               }
             }
 
@@ -381,9 +390,14 @@ function compileWorkflowContent(nodeOutputs, userInput) {
               content.metadata.characterCountByNode[`${nodeId}_part_${partIndex + 1}`] = charCount
               content.metadata.nodeCount++
 
+              // SURGICAL FIX: Prefer structural title if available
+              const canonicalTitle =
+                (content.structural.chapterTitles && content.structural.chapterTitles[chapterStructure.chapterNumber]) ||
+                chapterStructure.title
+
               content.sections.push({
                 nodeId,
-                title: chapterStructure.title,
+                title: canonicalTitle,
                 chapterNumber: chapterStructure.chapterNumber,
                 content: chapterStructure.cleanContent,
                 metadata: {
@@ -404,6 +418,7 @@ function compileWorkflowContent(nodeOutputs, userInput) {
               content.metadata.characterCountByNode[`${nodeId}_part_${partIndex + 1}`] = charCount
               content.metadata.nodeCount++
 
+              // Single-content sections do not get structural chapter titles; keep as-is.
               content.sections.push({
                 nodeId,
                 title: output.metadata?.title || output.metadata?.nodeName || `Section ${content.sections.length + 1}`,
@@ -429,9 +444,14 @@ function compileWorkflowContent(nodeOutputs, userInput) {
             content.metadata.characterCountByNode[`${nodeId}_single`] = charCount
             content.metadata.nodeCount++
 
+            // SURGICAL FIX: Prefer structural title if available
+            const canonicalTitle =
+              (content.structural.chapterTitles && content.structural.chapterTitles[chapterStructure.chapterNumber]) ||
+              chapterStructure.title
+
             content.sections.push({
               nodeId,
-              title: chapterStructure.title,
+              title: canonicalTitle,
               chapterNumber: chapterStructure.chapterNumber,
               content: chapterStructure.cleanContent,
               metadata: {

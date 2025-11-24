@@ -4,18 +4,25 @@
  * 
  * @param {Object} initialInput - User input
  * @param {string} workflowId - Workflow execution ID
- * @param {Object} superAdminUser - Super admin user object
+ * @param {Object} executionUser - Execution user context object
  * @param {Array} executionOrder - Execution order array
  * @returns {Object} Initialized pipeline data
  */
-function initializePipelineData(initialInput, workflowId, superAdminUser, executionOrder) {
+function initializePipelineData(initialInput, workflowId, executionUser, executionOrder) {
+  // SURGICAL: Validate executionUser before using it
+  if (!executionUser || !executionUser.id) {
+    const error = new Error(`pipelineInitializer: executionUser is missing or invalid - id: ${executionUser?.id}`);
+    console.error('❌ pipelineInitializer error:', error.message, { executionUser });
+    throw error;
+  }
+  
   return {
     userInput: initialInput,
     nodeOutputs: {},
     lastNodeOutput: null,
     previousNodePassover: null,
     structuralNodeOutputs: {}, // SURGICAL: Track structural node outputs separately
-    superAdminUser: superAdminUser,
+    executionUser: executionUser, // SURGICAL: Must be valid object with id
     metadata: {
       workflowId,
       executionTime: new Date(),

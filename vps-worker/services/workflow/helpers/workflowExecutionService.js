@@ -249,13 +249,13 @@ class WorkflowExecutionService {
    * @param {Function} progressCallback - Progress update callback
    * @returns {Object} Final workflow output
    */
-  async executeWorkflow(nodes, edges, initialInput, workflowId, progressCallback = null, superAdminUser = null) {
+  async executeWorkflow(nodes, edges, initialInput, workflowId, progressCallback = null, executionUser = null) {
     const startTime = Date.now() // DEFINE START TIME FOR EXECUTION TRACKING
     
     try {
-      // Validate SuperAdmin authentication
-      if (!superAdminUser || !superAdminUser.id) {
-        throw new Error('SuperAdmin authentication required for workflow execution')
+      // Validate execution user context (needed for provider keys, limits, analytics)
+      if (!executionUser || !executionUser.id) {
+        throw new Error('Execution user context required for workflow execution')
       }
 
       // Initialize execution state
@@ -293,7 +293,7 @@ class WorkflowExecutionService {
       let pipelineData = {
         userInput: initialInput,
         nodeOutputs: {},
-        superAdminUser: superAdminUser,
+        executionUser: executionUser,
         metadata: {
           workflowId,
           executionTime: new Date(),
@@ -823,9 +823,28 @@ class WorkflowExecutionService {
         executionDataKeys: executionData.execution_data ? Object.keys(executionData.execution_data) : []
       })
       
-      const checkpointData = executionData.execution_data?.checkpointData
+      let checkpointData = executionData.execution_data?.checkpointData
       if (!checkpointData || !checkpointData.nodeOutputs) {
-        throw new Error('No checkpoint data found - cannot resume')
+        // SURGICAL FALLBACK: Rebuild checkpoint data from nodeResults when explicit
+        // checkpointData is missing but we still have real node outputs persisted.
+        const nodeResults = executionData.execution_data?.nodeResults
+        if (nodeResults && Object.keys(nodeResults).length > 0) {
+          console.warn('⚠️ No checkpointData found in execution_data – rebuilding fallback checkpoint from nodeResults for resume.')
+          checkpointData = {
+            nodeId: executionData.execution_data.failedNodeId || null,
+            nodeName: executionData.execution_data.failedNodeName || null,
+            nodeIndex: null,
+            nodeOutputs: nodeResults,
+            userInput: executionData.input_data || {},
+            executionOrder: [],
+            completedNodes: Object.keys(nodeResults),
+            failedAtNode: executionData.execution_data.failedNodeId || null,
+            structuralNodeOutputs: executionData.execution_data.structuralNodeOutputs || {},
+            timestamp: new Date().toISOString()
+          }
+        } else {
+          throw new Error('No checkpoint data found - cannot resume')
+        }
       }
       
       console.log(`📦 Loaded checkpoint:`, {
@@ -884,7 +903,7 @@ class WorkflowExecutionService {
         edges,
         pipelineData.userInput,
         progressCallback,
-        null, // superAdminUser
+        null, // executionUser (resume without explicit user override)
         resumeIndex,
         pipelineData.nodeOutputs,
         buildExecutionOrderHelper,
@@ -1418,7 +1437,7 @@ class WorkflowExecutionService {
   // REMOVED: All state management methods extracted to workflow/state/executionStateManager.js
   // Access via: stateManager.updateExecutionState(), stateManager.stopWorkflow(), etc.
 
-  async restartFromCheckpoint(workflowId, nodeId, nodes, edges, initialInput, progressCallback, superAdminUser) {
+  async restartFromCheckpoint(workflowId, nodeId, nodes, edges, initialInput, progressCallback, executionUser) {
     return await restartFromCheckpointHelper(
       workflowId,
       nodeId,
@@ -1426,7 +1445,7 @@ class WorkflowExecutionService {
       edges,
       initialInput,
       progressCallback,
-      superAdminUser,
+      executionUser,
       buildExecutionOrderHelper,
       this.executeNode.bind(this),
       this.restartFailedNode.bind(this),
@@ -1434,7 +1453,7 @@ class WorkflowExecutionService {
     )
   }
 
-  async restartFailedNode(workflowId, nodeId, nodes, edges, initialInput, progressCallback, superAdminUser) {
+  async restartFailedNode(workflowId, nodeId, nodes, edges, initialInput, progressCallback, executionUser) {
     return await restartFailedNodeHelper(
       workflowId,
       nodeId,
@@ -1442,14 +1461,14 @@ class WorkflowExecutionService {
       edges,
       initialInput,
       progressCallback,
-      superAdminUser,
+      executionUser,
       buildExecutionOrderHelper,
       this.executeNode.bind(this),
       this.continueWorkflowFromNode.bind(this)
     )
   }
 
-  async continueWorkflowFromNode(workflowId, fromNodeId, nodes, edges, initialInput, progressCallback, superAdminUser) {
+  async continueWorkflowFromNode(workflowId, fromNodeId, nodes, edges, initialInput, progressCallback, executionUser) {
     return await continueWorkflowFromNodeHelper(
       workflowId,
       fromNodeId,
@@ -1457,21 +1476,21 @@ class WorkflowExecutionService {
       edges,
       initialInput,
       progressCallback,
-      superAdminUser,
+      executionUser,
       buildExecutionOrderHelper,
       this.executeNode.bind(this),
       this.continueExecutionFromNode.bind(this)
     )
   }
 
-  async continueExecutionFromNode(workflowId, nodes, edges, initialInput, progressCallback, superAdminUser, startIndex, existingOutputs) {
+  async continueExecutionFromNode(workflowId, nodes, edges, initialInput, progressCallback, executionUser, startIndex, existingOutputs) {
     return await continueExecutionFromNodeHelper(
       workflowId,
       nodes,
       edges,
       initialInput,
       progressCallback,
-      superAdminUser,
+      executionUser,
       startIndex,
       existingOutputs,
       buildExecutionOrderHelper,
