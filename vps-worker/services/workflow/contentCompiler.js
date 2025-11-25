@@ -159,16 +159,6 @@ function compileWorkflowContent(nodeOutputs, userInput) {
         const maybeJson = unfenced.startsWith('{') ? unfenced : (structuralContent.trim().startsWith('{') ? structuralContent.trim() : '')
         if (maybeJson) {
           const parsed = JSON.parse(maybeJson)
-          // SURGICAL FIX: Extract chapter titles from chapter_breakdown
-          const chapterBreakdown = parsed?.story_structure?.chapter_breakdown || parsed?.chapter_breakdown
-          if (Array.isArray(chapterBreakdown) && chapterBreakdown.length > 0) {
-            chapterBreakdown.forEach(ch => {
-              if (ch.chapter && ch.title) {
-                content.structural.chapterTitles[ch.chapter] = ch.title
-              }
-            })
-            console.log(`📐 EXTRACTED chapter titles in compiler:`, content.structural.chapterTitles)
-          }
           const opening = parsed?.opening_content || parsed?.story_architecture?.opening_content
           if (opening) {
             if (opening.foreword?.content) {
@@ -321,41 +311,24 @@ function compileWorkflowContent(nodeOutputs, userInput) {
             content.metadata.characterCountByNode[`${nodeId}_chapter_${chNum}`] = charCount
             content.metadata.nodeCount++
 
-            // SURGICAL FIX: Extract title from structural node data FIRST, then content, then fallback
-            let chapterTitle = chapter.title
+            // SURGICAL FIX: Prefer canonical structural title if available
+            let chapterTitle =
+              (content.structural.chapterTitles && content.structural.chapterTitles[chNum]) ||
+              chapter.title
+
+            // If still no title, attempt to extract from the content itself
             if (!chapterTitle || !chapterTitle.trim()) {
-              // Try structural node titles first
-              if (content.structural.chapterTitles && content.structural.chapterTitles[chNum]) {
-                chapterTitle = content.structural.chapterTitles[chNum]
-                console.log(`📐 Using chapter title from structural node: "${chapterTitle}"`)
-              } else {
-                // Try extracting from content
-                const chapterStructure = extractChapterStructure(chapter.content)
-                if (chapterStructure && chapterStructure.title && chapterStructure.title.trim()) {
-                  chapterTitle = chapterStructure.title.trim()
-                  // Remove "Content Writer" placeholder if found
-                  if (chapterTitle.toLowerCase().includes('content writer')) {
-                    chapterTitle = null
-                  } else {
-                    console.log(`📖 Extracted chapter title from content: "${chapterTitle}"`)
-                  }
-                }
-                
-                // Final fallback - leave empty if no valid title (downstream filters will handle)
-                if (!chapterTitle || !chapterTitle.trim() || chapterTitle.toLowerCase().includes('content writer')) {
-                  console.warn(`⚠️ Chapter ${chNum} has no reliable title – leaving title empty for downstream filters`)
-                  chapterTitle = '' // downstream exporters decide whether to skip or label explicitly
-                }
+              const chapterStructure = extractChapterStructure(chapter.content)
+              if (chapterStructure && chapterStructure.title && chapterStructure.title.trim()) {
+                chapterTitle = chapterStructure.title.trim()
+                console.log(`📖 Extracted chapter title from content: "${chapterTitle}"`)
               }
-            } else if (chapterTitle.toLowerCase().includes('content writer')) {
-              // Replace "Content Writer" placeholder with structural title or leave empty
-              if (content.structural.chapterTitles && content.structural.chapterTitles[chNum]) {
-                chapterTitle = content.structural.chapterTitles[chNum]
-                console.log(`📐 Replaced "Content Writer" with structural title: "${chapterTitle}"`)
-              } else {
-                console.warn(`⚠️ Chapter ${chNum} has no reliable title – leaving title empty for downstream filters`)
-                chapterTitle = '' // downstream exporters decide whether to skip or label explicitly
-              }
+            }
+
+            // FINAL GUARD: if we *still* have no title, log and continue without inventing placeholders.
+            if (!chapterTitle || !chapterTitle.trim()) {
+              console.warn(`⚠️ Chapter ${chNum} has no reliable title – leaving title empty for downstream filters`)
+              chapterTitle = '' // downstream exporters decide whether to skip or label explicitly
             }
 
             content.sections.push({

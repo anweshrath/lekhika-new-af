@@ -244,8 +244,7 @@ async function executeSingleAIGeneration({
       if (currentChapterData) {
         structuralNodeContext = `
 📐 STRUCTURAL NODE DIRECTIVE (MANDATORY):
-- CHAPTER TITLE: "${currentChapterData.title}" (YOU MUST START THE CHAPTER WITH "Chapter ${currentChapterNum}: ${currentChapterData.title}" EXACTLY)
--- DO NOT include book title, author name, or Table of Contents in the chapter
+- CHAPTER TITLE: "${currentChapterData.title}" (YOU MUST USE THIS EXACT TITLE)
 - CHAPTER OUTLINE: ${Array.isArray(currentChapterData.outline) ? currentChapterData.outline.join(', ') : 'Follow the story structure'}
 - DO NOT suggest or hint at a "next chapter" - this is the final chapter or part of a complete book
 - END THE CHAPTER NATURALLY without transition suggestions`
@@ -287,11 +286,10 @@ CRITICAL ORCHESTRATION REQUIREMENTS:
 - START DIRECTLY WITH THE CHAPTER TITLE AND CONTENT
 
 CHAPTER STRUCTURE REQUIREMENTS:
-${chapterTitleToUse ? `- START WITH CHAPTER TITLE: "Chapter ${allData.currentChapter || 1}: ${chapterTitleToUse}" (MANDATORY - USE EXACTLY AS SHOWN)` : `- START WITH A DESCRIPTIVE CHAPTER TITLE: "Chapter ${allData.currentChapter || 1}: [Create a meaningful title based on content]"`}
-- DO NOT include book title, author name, or Table of Contents in the chapter content
-- DO NOT include markdown links like [Chapter Title](#chapter-X) - only plain text
+- START WITH CHAPTER TITLE: "Chapter ${allData.currentChapter || 1}: ${chapterTitleToUse}"
 - INCLUDE PROPER INTRODUCTION TO THE CHAPTER
 - DEVELOP MAIN CONTENT WITH CLEAR SECTIONS
+- INCLUDE PRACTICAL EXAMPLES AND APPLICATIONS
 - END WITH CHAPTER SUMMARY${currentChapterNum < chapterCount ? ' AND TRANSITION TO NEXT CHAPTER' : ' - THIS IS THE FINAL CHAPTER, END NATURALLY WITHOUT SUGGESTING MORE CHAPTERS'}
 
 WORD COUNT ENFORCEMENT:

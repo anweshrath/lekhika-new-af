@@ -525,33 +525,25 @@ class ProfessionalBookFormatter {
     }
     
     let formatted = content
-      // SURGICAL FIX: Remove markdown placeholders and TOC garbage FIRST
-      .replace(/\[Chapter\s+[^\]]+\]\(#chapter-\d+\)/gi, '') // Remove markdown links like [Chapter New Beginnings](#chapter-1)
-      .replace(/^[-*]\s*\[Chapter\s+[^\]]+\]\(#chapter-\d+\)/gmi, '') // Remove TOC markdown lists
-      .replace(/^#+\s*Table\s+of\s+Contents?\s*$/gmi, '') // Remove TOC headings
-      .replace(/^#+\s*Lund\s*$/gmi, '') // Remove book title headings
-      .replace(/^\*\*by\s+[^\*]+\*\*\s*$/gmi, '') // Remove author metadata
-      .replace(/^---+\s*$/gm, '') // Remove separators
-      .replace(/^#{1,3}\s*Chapter\s*\d+:\s*[^\n]*\s*$/gmi, '') // Remove chapter headers that appear in content
       // Remove duplicate chapter headers
       .replace(/^#\s*Chapter\s*\d+:.*$/gm, '')
       .replace(/^##\s*Chapter\s*\d+:.*$/gm, '')
-      .replace(/^\*\*Chapter\s*\d+:.*\*\*\s*$/gm, '')
+      
       // Format dialogue with proper styling
       .replace(/"([^"]+)"/g, '<span class="dialogue">"$1"</span>')
+      
       // Format emphasis and important words
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-      // Format section headers (but not chapter headers)
+      
+      // Format section headers
       .replace(/^### (.+)$/gm, '<h3>$1</h3>')
       .replace(/^## (.+)$/gm, '<h2>$1</h2>')
       .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-      // Clean up excessive whitespace
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
+      
       // Convert paragraphs
       .split('\n\n')
-      .filter(para => para.trim() && para.trim().length > 0)
+      .filter(para => para.trim())
       .map(para => `<p>${para.trim()}</p>`)
       .join('\n\n')
     
