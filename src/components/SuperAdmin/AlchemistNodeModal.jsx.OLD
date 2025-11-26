@@ -1,0 +1,1099 @@
+/**
+ * ALCHEMIST NODE MODAL
+ * Complete node configuration modal with all features from main FlowNodeModal
+ * Includes AI model selection, input fields, advanced settings, and more
+ */
+
+import React, { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { 
+  X, Settings, Play, Copy, Trash2, Save, RefreshCw, 
+  FileText, Brain, Zap, Eye, Download, Upload, 
+  ChevronDown, ChevronUp, CheckCircle, AlertTriangle,
+  Info, HelpCircle, Target, Users, Calendar, Clock,
+  DollarSign, BarChart3, TrendingUp, Activity
+} from 'lucide-react'
+import { supabase } from '../../lib/supabase'
+import toast from 'react-hot-toast'
+import { 
+  getAlchemistVariablesByType, 
+  getAllAlchemistVariables, 
+  getTestInputForNodeType,
+  validateAlchemistVariable 
+} from '../../data/alchemistVariables'
+
+const AlchemistNodeModal = ({ isOpen, onClose, node, onUpdate, onDelete }) => {
+  const [activeTab, setActiveTab] = useState('basic')
+  const [loading, setLoading] = useState(false)
+  const [availableAIModels, setAvailableAIModels] = useState([])
+  const [variableSearch, setVariableSearch] = useState('')
+  
+  // Add error boundary
+  if (!node || !node.data) {
+    console.error('AlchemistNodeModal: Invalid node data', node)
+    return null
+  }
+  const [nodeConfig, setNodeConfig] = useState({
+    // Basic Configuration
+    name: '',
+    description: '',
+    aiModel: null,
+    
+    // Alchemist Variables (ending with _alc)
+    alchemistVariables: {},
+    
+    // Advanced Settings
+    validationLevel: 'strict',
+    autoSuggestions: true,
+    syncMode: 'selective',
+    processingMode: 'standard',
+    qualityLevel: 'high',
+    maxTokens: 4000,
+    
+    // Node-specific Settings
+    nodeType: '',
+    category: '',
+    features: [],
+    inputFields: [],
+    
+    // Custom Instructions
+    customInstructions: '',
+    systemPrompt: '',
+    userPrompt: '',
+    
+    // Performance Settings
+    timeout: 30000,
+    retries: 3,
+    fallbackAction: 'skip',
+    
+    // Output Settings
+    outputFormat: 'json',
+    includeMetadata: true,
+    enableLogging: true
+  })
+
+  const [testInputData, setTestInputData] = useState({})
+  const [availableVariables, setAvailableVariables] = useState({})
+
+  // Load AI models and initialize configuration
+  useEffect(() => {
+    if (isOpen && node) {
+      loadAIModels()
+      initializeNodeConfig()
+    }
+  }, [isOpen, node])
+
+  const loadAIModels = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('ai_model_metadata')
+        .select('model_id, model_name, provider, description, input_cost_per_million, output_cost_per_million, context_window_tokens, specialties')
+        .eq('is_active', true)
+        .order('provider', { ascending: true })
+        .order('model_name', { ascending: true })
+
+      if (error) throw error
+      setAvailableAIModels(data || [])
+    } catch (error) {
+      console.error('Error loading AI models:', error)
+      toast.error('Failed to load AI models')
+    }
+  }
+
+  const initializeNodeConfig = () => {
+    if (node && node.data) {
+      try {
+        // Load variables specific to this node type
+        const nodeVariables = getAlchemistVariablesByType(node.type)
+        setAvailableVariables(nodeVariables)
+        
+        // Load test input data for this node type
+        const testData = getTestInputForNodeType(node.type)
+        setTestInputData(testData)
+        
+        setNodeConfig({
+        name: node.data?.label || '',
+        description: node.data?.description || '',
+        aiModel: node.data?.aiModel || null,
+        alchemistVariables: node.data?.configuration?.alchemistVariables || {},
+        features: node.data?.configuration?.features || [],
+        inputFields: node.data?.configuration?.inputFields || [],
+        nodeType: node.type || '',
+        category: getNodeCategory(node.type),
+        customInstructions: node.data?.configuration?.customInstructions || '',
+        systemPrompt: node.data?.configuration?.systemPrompt || '',
+        userPrompt: node.data?.configuration?.userPrompt || '',
+        validationLevel: node.data?.configuration?.validationLevel || 'strict',
+        autoSuggestions: node.data?.configuration?.autoSuggestions !== false,
+        syncMode: node.data?.configuration?.syncMode || 'selective',
+        processingMode: node.data?.configuration?.processingMode || 'standard',
+        qualityLevel: node.data?.configuration?.qualityLevel || 'high',
+        maxTokens: node.data?.configuration?.maxTokens || 4000,
+        timeout: node.data?.configuration?.timeout || 30000,
+        retries: node.data?.configuration?.retries || 3,
+        fallbackAction: node.data?.configuration?.fallbackAction || 'skip',
+        outputFormat: node.data?.configuration?.outputFormat || 'json',
+        includeMetadata: node.data?.configuration?.includeMetadata !== false,
+        enableLogging: node.data?.configuration?.enableLogging !== false
+        })
+      } catch (error) {
+        console.error('Error initializing node config:', error)
+        toast.error('Failed to initialize node configuration')
+      }
+    }
+  }
+
+  const getNodeCategory = (nodeType) => {
+    const categories = {
+      dataCollector: 'input',
+      formBuilder: 'input',
+      variableManager: 'input',
+      contentWriter: 'process',
+      researchEngine: 'process',
+      qualityOptimizer: 'process',
+      logicGate: 'condition',
+      decisionTree: 'condition',
+      validationCheck: 'condition',
+      blueprintDesigner: 'structural',
+      templateManager: 'structural',
+      layoutEngine: 'structural',
+      multiFormatExporter: 'output',
+      previewGenerator: 'output',
+      deliveryManager: 'output'
+    }
+    return categories[nodeType] || 'master'
+  }
+
+  // Variable management functions
+  const toggleAlchemistVariable = (variable) => {
+    const isAlreadyUsed = nodeConfig.inputFields?.some(field => field.variable === variable.variable)
+    
+    if (isAlreadyUsed) {
+      // Remove variable
+      setNodeConfig(prev => ({
+        ...prev,
+        inputFields: (prev.inputFields || []).filter(field => field.variable !== variable.variable)
+      }))
+    } else {
+      // Add variable with default required setting
+      setNodeConfig(prev => ({
+        ...prev,
+        inputFields: [...(prev.inputFields || []), { 
+          ...variable, 
+          required: true,
+          id: Date.now() + Math.random() // Generate unique ID
+        }]
+      }))
+    }
+  }
+
+  // Filter Alchemist variables based on search
+  const filteredAlchemistVariables = getAllAlchemistVariables().filter(variable =>
+    variable.name.toLowerCase().includes(variableSearch.toLowerCase()) ||
+    variable.variable.toLowerCase().includes(variableSearch.toLowerCase()) ||
+    (variable.description && variable.description.toLowerCase().includes(variableSearch.toLowerCase()))
+  )
+
+  const handleSave = async () => {
+    setLoading(true)
+    try {
+      const updatedNode = {
+        ...node,
+        data: {
+          ...node.data,
+          label: nodeConfig.name,
+          description: nodeConfig.description,
+          aiModel: nodeConfig.aiModel,
+          configuration: {
+            alchemistVariables: nodeConfig.alchemistVariables,
+            features: nodeConfig.features,
+            inputFields: nodeConfig.inputFields,
+            validationLevel: nodeConfig.validationLevel,
+            autoSuggestions: nodeConfig.autoSuggestions,
+            syncMode: nodeConfig.syncMode,
+            processingMode: nodeConfig.processingMode,
+            qualityLevel: nodeConfig.qualityLevel,
+            maxTokens: nodeConfig.maxTokens,
+            customInstructions: nodeConfig.customInstructions,
+            systemPrompt: nodeConfig.systemPrompt,
+            userPrompt: nodeConfig.userPrompt,
+            timeout: nodeConfig.timeout,
+            retries: nodeConfig.retries,
+            fallbackAction: nodeConfig.fallbackAction,
+            outputFormat: nodeConfig.outputFormat,
+            includeMetadata: nodeConfig.includeMetadata,
+            enableLogging: nodeConfig.enableLogging
+          }
+        }
+      }
+
+      await onUpdate(updatedNode)
+      toast.success('Node configuration saved successfully!')
+    } catch (error) {
+      console.error('Error saving node:', error)
+      toast.error('Failed to save node configuration')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = () => {
+    if (window.confirm('Are you sure you want to delete this node? This action cannot be undone.')) {
+      onDelete()
+      onClose()
+    }
+  }
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(JSON.stringify(nodeConfig, null, 2))
+    toast.success('Node configuration copied to clipboard!')
+  }
+
+  const handleTest = () => {
+    // Validate all variables before testing
+    const validationErrors = []
+    Object.keys(nodeConfig.alchemistVariables).forEach(key => {
+      const validation = validateAlchemistVariable(key, nodeConfig.alchemistVariables[key])
+      if (!validation.valid) {
+        validationErrors.push(validation.error)
+      }
+    })
+    
+    if (validationErrors.length > 0) {
+      toast.error(`Validation errors: ${validationErrors.join(', ')}`)
+      return
+    }
+    
+    toast.success('Node test executed successfully!')
+  }
+
+  // Sync test input with current variables
+  const syncTestInput = () => {
+    setNodeConfig(prev => ({
+      ...prev,
+      alchemistVariables: { ...testInputData }
+    }))
+    toast.success('Test input synced with variables!')
+  }
+
+  // Update alchemist variable value
+  const updateAlchemistVariable = (variableKey, value) => {
+    setNodeConfig(prev => ({
+      ...prev,
+      alchemistVariables: {
+        ...prev.alchemistVariables,
+        [variableKey]: value
+      }
+    }))
+  }
+
+  // Validate alchemist variable
+  const validateVariable = (variableKey, value) => {
+    return validateAlchemistVariable(variableKey, value)
+  }
+
+  // Calculate estimated cost for AI model
+  const calculateEstimatedCost = (aiModel, maxTokens) => {
+    if (!aiModel || !aiModel.input_cost_per_million || !aiModel.output_cost_per_million) {
+      return 0
+    }
+    
+    const inputTokens = maxTokens
+    const outputTokens = Math.round(maxTokens * 0.3) // Assume 30% output ratio
+    
+    const inputCost = (inputTokens / 1000000) * aiModel.input_cost_per_million
+    const outputCost = (outputTokens / 1000000) * aiModel.output_cost_per_million
+    
+    return inputCost + outputCost
+  }
+
+  const addFeature = () => {
+    setNodeConfig(prev => ({
+      ...prev,
+      features: [...(prev.features || []), '']
+    }))
+  }
+
+  const updateFeature = (index, value) => {
+    setNodeConfig(prev => ({
+      ...prev,
+      features: (prev.features || []).map((f, i) => i === index ? value : f)
+    }))
+  }
+
+  const removeFeature = (index) => {
+    setNodeConfig(prev => ({
+      ...prev,
+      features: (prev.features || []).filter((_, i) => i !== index)
+    }))
+  }
+
+  const addVariable = () => {
+    setNodeConfig(prev => ({
+      ...prev,
+      variables: [...(prev.variables || []), '']
+    }))
+  }
+
+  const updateVariable = (index, value) => {
+    setNodeConfig(prev => ({
+      ...prev,
+      variables: (prev.variables || []).map((v, i) => i === index ? value : v)
+    }))
+  }
+
+  const removeVariable = (index) => {
+    setNodeConfig(prev => ({
+      ...prev,
+      variables: (prev.variables || []).filter((_, i) => i !== index)
+    }))
+  }
+
+  if (!isOpen || !node || !node.data) {
+    console.log('AlchemistNodeModal: Not rendering - isOpen:', isOpen, 'node:', node)
+    return null
+  }
+
+  const tabs = [
+    { id: 'basic', label: 'Basic', icon: Settings },
+    { id: 'inputs', label: 'Input Fields', icon: FileText },
+    { id: 'ai', label: 'AI Settings', icon: Brain },
+    { id: 'variables', label: 'Variables', icon: Target },
+    { id: 'advanced', label: 'Advanced', icon: Zap },
+    { id: 'test', label: 'Test', icon: Play }
+  ]
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          className="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden border border-gray-700"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-700">
+            <div>
+              <h2 className="text-2xl font-bold text-white">{nodeConfig.name || 'Node Configuration'}</h2>
+              <p className="text-gray-400 text-sm">{nodeConfig.description || 'Configure node settings and behavior'}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopy}
+                className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                title="Copy Configuration"
+              >
+                <Copy className="w-5 h-5" />
+              </button>
+              <button
+                onClick={onClose}
+                className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex border-b border-gray-700">
+            {tabs.map((tab) => {
+              const Icon = tab.icon
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-6 py-4 font-medium transition-colors ${
+                    activeTab === tab.id
+                      ? 'text-purple-400 border-b-2 border-purple-400 bg-purple-400/10'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {tab.label}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Content */}
+          <div className="p-6 overflow-y-auto max-h-[60vh]">
+            {/* Basic Tab */}
+            {activeTab === 'basic' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">Node Name</label>
+                    <input
+                      type="text"
+                      value={nodeConfig.name}
+                      onChange={(e) => setNodeConfig(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                      placeholder="Enter node name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">Node Type</label>
+                    <input
+                      type="text"
+                      value={nodeConfig.nodeType}
+                      disabled
+                      className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-gray-400"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-300 mb-2">Description</label>
+                  <textarea
+                    value={nodeConfig.description}
+                    onChange={(e) => setNodeConfig(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500 h-24 resize-none"
+                    placeholder="Enter node description"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">AI Provider</label>
+                    <select
+                      value={nodeConfig.aiModel?.provider || ''}
+                      onChange={(e) => {
+                        const provider = e.target.value
+                        const modelsForProvider = availableAIModels.filter(m => m.provider === provider)
+                        if (modelsForProvider.length > 0) {
+                          setNodeConfig(prev => ({ ...prev, aiModel: modelsForProvider[0] }))
+                        }
+                      }}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="">Select AI Provider</option>
+                      {Array.from(new Set(availableAIModels.map(m => m.provider))).map((provider) => (
+                        <option key={provider} value={provider}>
+                          {provider}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">AI Model</label>
+                    <select
+                      value={nodeConfig.aiModel?.model_id || ''}
+                      onChange={(e) => {
+                        const selectedModel = availableAIModels.find(m => m.model_id === e.target.value)
+                        setNodeConfig(prev => ({ ...prev, aiModel: selectedModel }))
+                      }}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                      disabled={!nodeConfig.aiModel?.provider}
+                    >
+                      <option value="">Select AI Model</option>
+                      {availableAIModels
+                        .filter(m => !nodeConfig.aiModel?.provider || m.provider === nodeConfig.aiModel.provider)
+                        .map((model) => (
+                        <option key={model.model_id} value={model.model_id}>
+                          {model.model_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                
+                {/* AI Model Cost Information */}
+                {nodeConfig.aiModel && (
+                  <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <h4 className="text-md font-semibold text-white mb-3">Model Cost Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <span className="text-sm text-gray-400">Provider:</span>
+                        <p className="text-white font-medium">{nodeConfig.aiModel.provider}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-400">Model:</span>
+                        <p className="text-white font-medium">{nodeConfig.aiModel.model_name}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-400">Context Window:</span>
+                        <p className="text-white font-medium">{nodeConfig.aiModel.context_window_tokens?.toLocaleString() || 'N/A'} tokens</p>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-sm text-gray-400">Input Cost:</span>
+                        <p className="text-green-400 font-medium">
+                          ${nodeConfig.aiModel.input_cost_per_million || 'N/A'} per 1M tokens
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-400">Output Cost:</span>
+                        <p className="text-green-400 font-medium">
+                          ${nodeConfig.aiModel.output_cost_per_million || 'N/A'} per 1M tokens
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Estimated Cost Calculation */}
+                    <div className="mt-4 p-3 bg-gray-700 rounded border border-gray-600">
+                      <h5 className="text-sm font-semibold text-white mb-2">Estimated Cost for This Node</h5>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Input Tokens (est.):</span>
+                          <span className="text-white">{nodeConfig.maxTokens || 4000}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Output Tokens (est.):</span>
+                          <span className="text-white">{Math.round((nodeConfig.maxTokens || 4000) * 0.3)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm font-medium border-t border-gray-600 pt-2">
+                          <span className="text-gray-300">Total Estimated Cost:</span>
+                          <span className="text-yellow-400">
+                            ${calculateEstimatedCost(nodeConfig.aiModel, nodeConfig.maxTokens || 4000).toFixed(4)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Input Fields Tab */}
+            {activeTab === 'inputs' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-white">Input Fields Configuration</h3>
+                  <div className="text-sm text-gray-400">
+                    {nodeConfig.inputFields?.length || 0} fields • Use Variables tab to add/remove fields
+                  </div>
+                </div>
+
+                {/* Input Fields Form */}
+                {nodeConfig.inputFields && nodeConfig.inputFields.length > 0 && (
+                  <div className="space-y-4">
+                    <h4 className="text-md font-semibold text-gray-200 border-b border-gray-600 pb-2">
+                      Customer Input Form ({nodeConfig.inputFields.length} fields)
+                    </h4>
+                    <div className="grid grid-cols-1 gap-4">
+                      {nodeConfig.inputFields.map((field, index) => {
+                        const variableData = getAllAlchemistVariables().find(v => v.variable === field.variable);
+                        
+                        return (
+                          <div key={index} className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                            <div className="flex items-center justify-between mb-3">
+                              <label className="block text-sm font-medium text-gray-300">
+                                {variableData?.name || field.name}
+                                {field.required && <span className="text-red-400 ml-1">*</span>}
+                              </label>
+                              <code className="text-xs bg-purple-800/50 px-2 py-1 rounded text-purple-200">
+                                {field.variable}
+                              </code>
+                            </div>
+                            
+                            {field.type === 'text' && (
+                              <input
+                                type="text"
+                                defaultValue=""
+                                placeholder={variableData?.placeholder || field.placeholder || `Enter ${variableData?.name || field.name}`}
+                                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400"
+                                disabled
+                              />
+                            )}
+                            
+                            {field.type === 'textarea' && (
+                              <textarea
+                                rows={3}
+                                defaultValue=""
+                                placeholder={variableData?.placeholder || field.placeholder || `Enter ${variableData?.name || field.name}`}
+                                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 resize-none"
+                                disabled
+                              />
+                            )}
+                            
+                            {field.type === 'select' && (
+                              <select
+                                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+                                disabled
+                              >
+                                <option value="">Select {variableData?.name || field.name}</option>
+                                {variableData?.options?.map((option, idx) => (
+                                  <option key={idx} value={option}>{option}</option>
+                                ))}
+                              </select>
+                            )}
+                            
+                            {field.type === 'number' && (
+                              <input
+                                type="number"
+                                defaultValue=""
+                                placeholder={`Enter ${variableData?.name || field.name}`}
+                                min={variableData?.min}
+                                max={variableData?.max}
+                                step={variableData?.step}
+                                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400"
+                                disabled
+                              />
+                            )}
+                            
+                            {field.type === 'checkbox' && (
+                              <label className="flex items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4 rounded border-gray-600 bg-gray-700"
+                                  disabled
+                                />
+                                <span className="text-gray-300">{variableData?.name || field.name}</span>
+                              </label>
+                            )}
+                            
+                            {variableData?.description && (
+                              <p className="text-xs text-gray-400 mt-2">{variableData.description}</p>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {(!nodeConfig.inputFields || nodeConfig.inputFields.length === 0) && (
+                  <div className="text-center py-12 text-gray-500">
+                    <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <h4 className="text-lg font-semibold mb-2">No Input Fields</h4>
+                    <p className="mb-4">Go to the Variables tab to add input fields from Alchemist variables.</p>
+                    <p className="text-sm">Variables ending with '_alc' are specifically designed for Alchemist flows.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* AI Settings Tab */}
+            {activeTab === 'ai' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">Validation Level</label>
+                    <select
+                      value={nodeConfig.validationLevel}
+                      onChange={(e) => setNodeConfig(prev => ({ ...prev, validationLevel: e.target.value }))}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="strict">Strict</option>
+                      <option value="moderate">Moderate</option>
+                      <option value="lenient">Lenient</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">Processing Mode</label>
+                    <select
+                      value={nodeConfig.processingMode}
+                      onChange={(e) => setNodeConfig(prev => ({ ...prev, processingMode: e.target.value }))}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="standard">Standard</option>
+                      <option value="fast">Fast</option>
+                      <option value="thorough">Thorough</option>
+                      <option value="creative">Creative</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">Quality Level</label>
+                    <select
+                      value={nodeConfig.qualityLevel}
+                      onChange={(e) => setNodeConfig(prev => ({ ...prev, qualityLevel: e.target.value }))}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="high">High</option>
+                      <option value="medium">Medium</option>
+                      <option value="fast">Fast</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">Max Tokens</label>
+                    <input
+                      type="number"
+                      value={nodeConfig.maxTokens}
+                      onChange={(e) => setNodeConfig(prev => ({ ...prev, maxTokens: parseInt(e.target.value) }))}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                      min="100"
+                      max="32000"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">Custom Instructions</label>
+                    <textarea
+                      value={nodeConfig.customInstructions}
+                      onChange={(e) => setNodeConfig(prev => ({ ...prev, customInstructions: e.target.value }))}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500 h-32 resize-none"
+                      placeholder="Enter custom instructions for this node..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">System Prompt</label>
+                    <textarea
+                      value={nodeConfig.systemPrompt}
+                      onChange={(e) => setNodeConfig(prev => ({ ...prev, systemPrompt: e.target.value }))}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500 h-24 resize-none"
+                      placeholder="Enter system prompt..."
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Advanced Tab */}
+            {activeTab === 'advanced' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">Timeout (ms)</label>
+                    <input
+                      type="number"
+                      value={nodeConfig.timeout}
+                      onChange={(e) => setNodeConfig(prev => ({ ...prev, timeout: parseInt(e.target.value) }))}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                      min="1000"
+                      max="300000"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">Retries</label>
+                    <input
+                      type="number"
+                      value={nodeConfig.retries}
+                      onChange={(e) => setNodeConfig(prev => ({ ...prev, retries: parseInt(e.target.value) }))}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                      min="0"
+                      max="10"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-300 mb-2">Fallback Action</label>
+                  <select
+                    value={nodeConfig.fallbackAction}
+                    onChange={(e) => setNodeConfig(prev => ({ ...prev, fallbackAction: e.target.value }))}
+                    className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="skip">Skip</option>
+                    <option value="retry">Retry</option>
+                    <option value="error">Error</option>
+                    <option value="fallback">Use Fallback</option>
+                  </select>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-md font-semibold text-white">Features</h4>
+                    <button
+                      onClick={addFeature}
+                      className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm transition-colors"
+                    >
+                      Add Feature
+                    </button>
+                  </div>
+                  {nodeConfig.features.map((feature, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={feature}
+                        onChange={(e) => updateFeature(index, e.target.value)}
+                        className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-purple-500"
+                        placeholder="Enter feature"
+                      />
+                      <button
+                        onClick={() => removeFeature(index)}
+                        className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-md font-semibold text-white">Variables</h4>
+                    <button
+                      onClick={addVariable}
+                      className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm transition-colors"
+                    >
+                      Add Variable
+                    </button>
+                  </div>
+                  {nodeConfig.variables.map((variable, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={variable}
+                        onChange={(e) => updateVariable(index, e.target.value)}
+                        className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-purple-500"
+                        placeholder="Enter variable name"
+                      />
+                      <button
+                        onClick={() => removeVariable(index)}
+                        className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Variables Tab */}
+            {activeTab === 'variables' && (
+              <div className="space-y-6">
+                <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Target className="w-5 h-5 text-purple-400" />
+                    <h3 className="text-lg font-semibold text-purple-200">Alchemist Variables</h3>
+                  </div>
+                  <p className="text-sm text-purple-300 mb-4">
+                    Search and click variables to add/remove them from input fields. All variables end with '_alc' for Alchemist flows.
+                  </p>
+                  
+                  {/* Search Bar */}
+                  <div className="mb-4">
+                    <input
+                      type="text"
+                      placeholder="Search Alchemist variables..."
+                      value={variableSearch}
+                      onChange={(e) => setVariableSearch(e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Available Variables */}
+                    <div className="space-y-3">
+                      <h4 className="text-md font-semibold text-purple-200 border-b border-purple-600 pb-1">
+                        Available Variables ({filteredAlchemistVariables.length})
+                      </h4>
+                      <div className="space-y-2 text-sm max-h-96 overflow-y-auto">
+                        {filteredAlchemistVariables.map((variable, index) => {
+                          const isUsed = nodeConfig.inputFields?.some(field => field.variable === variable.variable)
+                          return (
+                            <div 
+                              key={index} 
+                              className={`flex justify-between items-center p-2 rounded cursor-pointer transition-all ${
+                                isUsed 
+                                  ? 'bg-green-800/30 hover:bg-green-700/40 text-green-200' 
+                                  : 'bg-purple-800/30 hover:bg-purple-700/40 text-purple-200'
+                              }`}
+                              onClick={() => toggleAlchemistVariable(variable)}
+                            >
+                              <div className="flex items-center space-x-2">
+                                <code className={`px-2 py-1 rounded text-xs ${
+                                  isUsed ? 'bg-green-800/50 text-green-200' : 'bg-purple-800/50 text-purple-200'
+                                }`}>
+                                  {variable.variable}
+                                </code>
+                                <span className={isUsed ? 'text-green-300' : 'text-purple-300'}>
+                                  {variable.name}
+                                </span>
+                              </div>
+                              <span className={`text-xs ${isUsed ? 'text-green-500' : 'text-purple-500'}`}>
+                                {isUsed ? '✓ Added' : '+ Add'}
+                              </span>
+                            </div>
+                          )
+                        })}
+                        {filteredAlchemistVariables.length === 0 && (
+                          <div className="text-center py-8 text-gray-500">
+                            <p>No variables found matching your search.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Currently Used Variables */}
+                    <div className="space-y-3">
+                      <h4 className="text-md font-semibold text-green-200 border-b border-green-600 pb-1">
+                        Input Fields ({nodeConfig.inputFields?.length || 0})
+                      </h4>
+                      <div className="space-y-2 text-sm max-h-96 overflow-y-auto">
+                        {nodeConfig.inputFields?.map((field, index) => (
+                          <div 
+                            key={index} 
+                            className="flex justify-between items-center p-2 rounded cursor-pointer transition-all bg-green-800/30 hover:bg-green-700/40 text-green-200"
+                            onClick={() => toggleAlchemistVariable(field)}
+                          >
+                            <div className="flex items-center space-x-2">
+                              <span className="text-green-400 cursor-move">⋮⋮</span>
+                              <code className="bg-green-800/50 px-2 py-1 rounded text-green-200 text-xs">
+                                {field.variable}
+                              </code>
+                              <span className="text-green-300">
+                                {field.name}
+                              </span>
+                            </div>
+                            <span className="text-xs text-green-500">✓ Active</span>
+                          </div>
+                        )) || []}
+                        {(!nodeConfig.inputFields || nodeConfig.inputFields.length === 0) && (
+                          <div className="text-center py-8 text-gray-500">
+                            <Target className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            <p>No variables selected</p>
+                            <p className="text-xs">Click variables from the left to add them</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Test Tab */}
+            {activeTab === 'test' && (
+              <div className="space-y-6">
+                <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                  <h3 className="text-lg font-semibold text-white mb-4">Node Testing & Test Input</h3>
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-md font-semibold text-white">Test Input Data</h4>
+                      <button
+                        onClick={syncTestInput}
+                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors flex items-center gap-1"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Load Defaults
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {Object.keys(testInputData).map((variableKey) => {
+                        const variable = availableVariables[variableKey]
+                        if (!variable) return null
+                        
+                        return (
+                          <div key={variableKey} className="bg-gray-700 rounded p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium text-gray-300">{variable.name}</span>
+                              <span className="text-xs text-gray-500">{variableKey}</span>
+                            </div>
+                            <div className="text-sm text-gray-200">
+                              {typeof testInputData[variableKey] === 'boolean' 
+                                ? (testInputData[variableKey] ? 'Yes' : 'No')
+                                : String(testInputData[variableKey])
+                              }
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    
+                    <div className="border-t border-gray-600 pt-4">
+                      <h4 className="text-md font-semibold text-white mb-3">Test Execution</h4>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-300 mb-2">Custom Test Input (JSON)</label>
+                          <textarea
+                            value={JSON.stringify(nodeConfig.alchemistVariables, null, 2)}
+                            onChange={(e) => {
+                              try {
+                                const parsed = JSON.parse(e.target.value)
+                                setNodeConfig(prev => ({
+                                  ...prev,
+                                  alchemistVariables: parsed
+                                }))
+                              } catch (error) {
+                                // Invalid JSON, don't update
+                              }
+                            }}
+                            className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500 h-32 resize-none font-mono text-sm"
+                            placeholder="Enter test input data as JSON..."
+                          />
+                        </div>
+                        
+                        <div className="flex gap-4">
+                          <button
+                            onClick={handleTest}
+                            className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                          >
+                            <Play className="w-4 h-4" />
+                            Run Test
+                          </button>
+                          <button
+                            onClick={() => {
+                              setNodeConfig(prev => ({
+                                ...prev,
+                                alchemistVariables: { ...testInputData }
+                              }))
+                              toast.success('Test input reset to defaults!')
+                            }}
+                            className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                            Reset to Defaults
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between p-6 border-t border-gray-700">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Node
+              </button>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onClose}
+                className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={loading}
+                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Save Configuration
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
+export default AlchemistNodeModal

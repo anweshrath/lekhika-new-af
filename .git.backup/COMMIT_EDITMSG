@@ -1,0 +1,8 @@
+Fix blank page: Restore BrowserRouter and UserPreferencesContext
+
+- Add BrowserRouter wrapper in main.jsx (required for React Router)
+- Restore complete UserPreferencesContext.jsx (was empty after iCloud incident)
+- This fixes the blank white page issue
+- Server now runs correctly with all dependencies
+- Commit all working changes after iCloud recovery
+- Remove corrupted folders: db/sql-scripts, model images, supabase/migrations

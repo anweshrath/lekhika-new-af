@@ -1,0 +1,1597 @@
+/**
+ * REAL Workflow Execution Service
+ * Executes workflows with actual AI calls and data flow between nodes
+ * NO MOCKUPS - REAL FUNCTIONALITY ONLY
+ */
+
+const { getSupabase } = require('./supabase.js')
+const { narrativeStructureService } = require('./narrativeStructureService.js')
+const { professionalBookFormatter } = require('./professionalBookFormatter.js')
+const exportService = require('./exportService.js')
+const { sampleAnalysisService } = require('./sampleAnalysisService.js')
+const bookCompilationService = require('./BookCompilationService.js')
+const aiResponseValidator = require('./aiResponseValidator.js')
+const { getCelebrityStyle } = require('../config/celebrityStyles.js')
+const {
+  compileWorkflowContent: compileWorkflowContentHelper,
+  sanitizeGeneratedContent,
+  extractChapterStructure
+} = require('./workflow/contentCompiler')
+const { applyPermissions } = require('./workflow/permissionService')
+const {
+  processPromptVariables: processPromptVariablesHelper,
+  generateChapterContext: generateChapterContextHelper
+} = require('./workflow/promptService')
+const { sanitizeUserInputForNextNode } = require('./workflow/inputSanitizer')
+const sessionService = require('./workflow/sessionService')
+const {
+  preRunTest: preRunTestHelper,
+  validateWorkflowStructure: validateWorkflowStructureHelper,
+  testNodeConfiguration: testNodeConfigurationHelper,
+  testAIConnectivity: testAIConnectivityHelper,
+  testExportServices: testExportServicesHelper
+} = require('./workflow/testService')
+const {
+  parseModelConfig: parseModelConfigHelper
+} = require('./workflow/modelService')
+const {
+  debitTokens,
+  getAIProviderInstance
+} = require('./workflow/executionService')
+const {
+  executeImageGeneration: executeImageGenerationHandler
+} = require('./workflow/handlers/imageGenerationHandler')
+const {
+  executeSingleAIGeneration: executeSingleAIGenerationHandler,
+  generateMultipleChapters: generateMultipleChaptersHandler
+} = require('./workflow/handlers/contentGenerationHandler')
+const {
+  executeContentRefinement: executeContentRefinementHandler
+} = require('./workflow/handlers/contentRefinementHandler')
+const {
+  executePreviewNode: executePreviewNodeHandler
+} = require('./workflow/handlers/previewHandler')
+const {
+  executeConditionNode: executeConditionNodeHandler
+} = require('./workflow/handlers/conditionHandler')
+const {
+  executeOutputNode: executeOutputNodeHandler
+} = require('./workflow/handlers/outputHandler')
+const {
+  formatFinalOutput: formatFinalOutputHelper,
+  generateDeliverables: generateDeliverablesHelper,
+  getMimeType: getMimeTypeHelper
+} = require('./workflow/helpers/outputHelpers')
+const {
+  deriveNodeTokenMetrics: deriveNodeTokenMetricsHelper,
+  calculateTokenUsageFromOutputs: calculateTokenUsageFromOutputsHelper,
+  buildTokenLedgerFromOutputs: buildTokenLedgerFromOutputsHelper,
+  extractNumericValue: extractNumericValueHelper,
+  getTokenUsageSummary: getTokenUsageSummaryHelper,
+  getTokenLedger: getTokenLedgerHelper
+} = require('./workflow/helpers/tokenHelpers')
+const {
+  restartFromCheckpoint: restartFromCheckpointHelper,
+  restartFailedNode: restartFailedNodeHelper,
+  continueWorkflowFromNode: continueWorkflowFromNodeHelper,
+  continueExecutionFromNode: continueExecutionFromNodeHelper
+} = require('./workflow/helpers/resumeHelpers')
+const {
+  convertResultsToNodeOutputs: convertResultsToNodeOutputsHelper,
+  extractChapterTitle: extractChapterTitleHelper
+} = require('./workflow/helpers/contentHelpers')
+const {
+  validateInputFields: validateInputFieldsHelper,
+  identifyMissingOptionals: identifyMissingOptionalsHelper,
+  createNextNodeInstructions: createNextNodeInstructionsHelper,
+  assessContentQuality: assessContentQualityHelper,
+  canSkipNode: canSkipNodeHelper
+} = require('./workflow/utils/workflowUtils')
+const {
+  evaluateCondition: evaluateConditionHelper,
+  executeConditionAction: executeConditionActionHelper
+} = require('./workflow/utils/conditionHelpers')
+const {
+  buildExecutionOrder: buildExecutionOrderHelper
+} = require('./workflow/utils/executionOrderBuilder')
+const {
+  structureInputData: structureInputDataHelper,
+  uploadFileToSupabase: uploadFileToSupabaseHelper
+} = require('./workflow/utils/inputProcessor')
+const {
+  preserveStructuralNodeOutput: preserveStructuralNodeOutputHelper,
+  rebuildStructuralNodeOutputs: rebuildStructuralNodeOutputsHelper
+} = require('./workflow/utils/structuralNodePreserver')
+const stateManager = require('./workflow/state/executionStateManager')
+
+class WorkflowExecutionService {
+  constructor() {
+    // State Maps now managed by stateManager singleton
+    // Access via: stateManager.executionState, stateManager.checkpointStates
+    this.currentSession = null // Current execution session
+    this.aiService = getAIProviderInstance()
+  }
+  
+  // Expose state Maps for backward compatibility (delegate to stateManager)
+  get executionState() {
+    return stateManager.executionState
+  }
+  
+  get checkpointStates() {
+    return stateManager.checkpointStates
+  }
+
+  // REMOVED: getAIService() - delegate wrapper, removed in Phase 6
+  // Use this.aiService directly or getAIProviderInstance() from executionService.js
+
+  // REMOVED: evaluateCondition(), executeConditionAction() extracted to workflow/utils/conditionHelpers.js (Phase 8)
+  // Use evaluateConditionHelper(), executeConditionActionHelper() from workflow/utils/conditionHelpers.js
+
+  /**
+   * Check for existing session and offer resume option
+   * @param {string} flowId - Flow identifier
+   * @param {string} userId - User identifier
+   * @returns {Object} Session status and resume options
+   */
+  checkForExistingSession(flowId, userId) {
+    return sessionService.checkForExistingSession(flowId, userId)
+  }
+
+  /**
+   * Start new execution session
+   * @param {Object} params - Session parameters
+   * @returns {Object} Session data
+   */
+  startNewSession(params) {
+    const sessionData = sessionService.startNewSession(params)
+    this.currentSession = sessionData
+    console.log('🚀 New execution session started:', params.flowId)
+    return sessionData
+  }
+
+  /**
+   * Resume existing session
+   * @param {string} flowId - Flow identifier
+   * @param {string} userId - User identifier
+   * @returns {Object} Resumed session data
+   */
+  resumeSession(flowId, userId) {
+    const session = sessionService.resumeSession(flowId, userId)
+    this.currentSession = session
+    console.log('🔄 Resuming execution session:', flowId)
+    return session
+  }
+
+  /**
+   * Update session with current execution state
+   * @param {Object} updates - Updates to apply
+   */
+  updateSession(updates) {
+    this.currentSession = sessionService.updateSession(this.currentSession, updates)
+  }
+
+  /**
+   * Complete session and clear from storage
+   */
+  completeSession() {
+    if (!this.currentSession) {
+      console.warn('⚠️ No active session to complete')
+      return
+    }
+
+    console.log('✅ Execution session completed:', this.currentSession.flowId)
+    sessionService.stopSession(
+      this.currentSession.flowId,
+      this.currentSession.userId
+    )
+    this.currentSession = null
+  }
+
+  /**
+   * Handle execution error and save session for recovery
+   * @param {Error} error - Execution error
+   * @param {Object} context - Error context
+   */
+  handleExecutionError(error, context = {}) {
+    if (!this.currentSession) {
+      console.error('❌ Execution error with no active session:', error)
+      return
+    }
+
+    const errorData = {
+      error: error.message,
+      stack: error.stack,
+      context,
+      timestamp: new Date().toISOString()
+    }
+
+    this.updateSession({
+      errors: [...(this.currentSession.errors || []), errorData],
+      currentPhase: 'error_recovery'
+    })
+
+    console.error('❌ Execution error saved to session:', errorData)
+  }
+
+  /**
+   * PRE-RUN TEST SYSTEM - Validate flow before execution
+   * @param {Array} nodes - Workflow nodes
+   * @param {Array} edges - Workflow edges
+   * @param {Object} initialInput - User input
+   * @param {Function} progressCallback - Progress update callback
+   * @returns {Object} Test results and validation status
+   */
+  async preRunTest(nodes, edges, initialInput, progressCallback = null) {
+    return preRunTestHelper(nodes, edges, initialInput, progressCallback)
+  }
+
+  async testNodeConfiguration(node, initialInput) {
+    return testNodeConfigurationHelper(node, initialInput)
+  }
+
+  /**
+   * Test AI connectivity for all nodes
+   */
+  async testAIConnectivity(nodes) {
+    return testAIConnectivityHelper(nodes)
+  }
+
+  async testExportServices() {
+    return testExportServicesHelper()
+  }
+
+  validateWorkflowStructure(nodes, edges) {
+    return validateWorkflowStructureHelper(nodes, edges)
+  }
+
+  /**
+   * Execute a complete workflow with real AI calls and data flow
+   * @param {Array} nodes - Workflow nodes
+   * @param {Array} edges - Workflow edges  
+   * @param {Object} initialInput - User input from Lekhika root app
+   * @param {string} workflowId - Unique workflow execution ID
+   * @param {Function} progressCallback - Progress update callback
+   * @returns {Object} Final workflow output
+   */
+  async executeWorkflow(nodes, edges, initialInput, workflowId, progressCallback = null, superAdminUser = null) {
+    const startTime = Date.now() // DEFINE START TIME FOR EXECUTION TRACKING
+    
+    try {
+      // Validate SuperAdmin authentication
+      if (!superAdminUser || !superAdminUser.id) {
+        throw new Error('SuperAdmin authentication required for workflow execution')
+      }
+
+      // Initialize execution state
+      stateManager.executionState.set(workflowId, {
+        status: 'running',
+        currentNode: null,
+        results: {},
+        errors: [],
+        startTime: new Date(),
+        progress: 0,
+        tokenUsage: {
+          totalTokens: 0,
+          totalCost: 0,
+          totalWords: 0
+        },
+        tokenLedger: []
+      })
+
+      // Build execution order based on edges
+      const executionOrder = buildExecutionOrderHelper(nodes, edges)
+      
+      // Build dependency maps for validation during execution
+      const incomingEdges = new Map()
+      const outgoingEdges = new Map()
+      nodes.forEach(node => {
+        incomingEdges.set(node.id, [])
+        outgoingEdges.set(node.id, [])
+      })
+      edges.forEach(edge => {
+        outgoingEdges.get(edge.source).push(edge.target)
+        incomingEdges.get(edge.target).push(edge.source)
+      })
+      
+      // Initialize data pipeline with user input
+      let pipelineData = {
+        userInput: initialInput,
+        nodeOutputs: {},
+        structuralNodeOutputs: {}, // SURGICAL FIX: Preserve structural node outputs separately
+        superAdminUser: superAdminUser,
+        metadata: {
+          workflowId,
+          executionTime: new Date(),
+          totalNodes: executionOrder.length
+        }
+      }
+
+      console.log('🔍 WORKFLOW EXECUTION DEBUG:')
+      console.log('  - Initial input:', initialInput)
+      console.log('  - Execution order:', executionOrder.map(n => `${n.id} (${n.type}) - ${n.data.label}`))
+      console.log('  - Total nodes to execute:', executionOrder.length)
+      console.log('  - Initial pipeline data:', pipelineData)
+
+      // Initialize execution with starting progress
+      stateManager.updateExecutionState(workflowId, {
+        currentNode: 'Initializing...',
+        progress: 5,
+        baseProgress: 5,
+        nodeIndex: -1,
+        totalNodes: executionOrder.length,
+        status: 'running'
+      })
+      
+      if (progressCallback) {
+        progressCallback({
+          nodeId: 'initializing',
+          nodeName: 'Initializing...',
+          progress: 5,
+          status: 'running',
+          providerName: null,
+          baseProgress: 5,
+          nodeIndex: -1,
+          totalNodes: executionOrder.length
+        })
+      }
+
+      // Execute nodes in sequence - CRITICAL: ENSURE PROPER ORDER
+      console.log('🔍 EXECUTION ORDER DEBUG:')
+      console.log('  - Total nodes:', executionOrder.length)
+      console.log('  - Execution sequence:', executionOrder.map((n, i) => `${i + 1}. ${n.data.label || n.id} (${n.data.type})`).join(', '))
+      
+      for (let i = 0; i < executionOrder.length; i++) {
+        // Check if workflow was paused - wait until resumed
+        if (stateManager.isWorkflowPaused(workflowId)) {
+          console.log(`⏸️ Workflow ${workflowId} is paused, waiting for resume...`)
+          // Wait indefinitely until resumed - use Promise that resolves only on resume
+          await stateManager.waitForResume(workflowId)
+        }
+
+        // Check if workflow was resumed from a specific checkpoint
+        const currentState = stateManager.getExecutionState(workflowId)
+        if (currentState?.resumedFromNode) {
+          console.log(`🔄 Workflow resumed from node: ${currentState.resumedFromNode}`)
+          // Skip to the node after the resumed checkpoint
+          const resumedNodeIndex = executionOrder.findIndex(node => node.id === currentState.resumedFromNode)
+          if (resumedNodeIndex !== -1 && resumedNodeIndex > i) {
+            console.log(`⏭️ Skipping to node ${resumedNodeIndex + 1} (resumed from ${currentState.resumedFromNode})`)
+            i = resumedNodeIndex // Skip to the resumed node
+            // Clear the resumedFromNode flag
+            stateManager.updateExecutionState(workflowId, { resumedFromNode: null })
+          }
+        }
+
+        // Check if workflow was stopped - ENHANCED CHECK
+        if (stateManager.isWorkflowStopped(workflowId) || await stateManager.checkDatabaseStopSignal(workflowId)) {
+          console.log(`🛑 Workflow ${workflowId} stopped during execution`)
+          
+          // IMMEDIATELY clear all processing states
+          stateManager.updateExecutionState(workflowId, {
+            status: 'stopped',
+            currentNode: null,
+            forceStopped: true
+          })
+          
+          // Force all nodes to stopped state - NO LINGERING "Processing"
+          if (progressCallback) {
+            progressCallback({
+              nodeId: null,
+              nodeName: 'System',
+              progress: 0,
+              status: 'stopped',
+              message: 'Workflow killed by user - all processing stopped',
+              forceStopped: true
+            })
+          }
+          
+          // COLLECT ALL PARTIAL RESULTS - DON'T LOSE GENERATED CONTENT
+          const currentState = stateManager.getExecutionState(workflowId)
+          const partialResults = currentState?.results || {}
+          const allNodeOutputs = pipelineData.nodeOutputs || {}
+          
+          console.log('📦 Collecting partial results:', {
+            partialResults,
+            allNodeOutputs,
+            nodeCount: Object.keys(allNodeOutputs).length
+          })
+          
+          const tokenUsage = getTokenUsageSummaryHelper(stateManager, workflowId, pipelineData.nodeOutputs)
+          const tokenLedger = getTokenLedgerHelper(stateManager, workflowId, pipelineData.nodeOutputs)
+
+          return {
+            success: false,
+            error: 'Workflow stopped by user',
+            results: partialResults,
+            partialOutputs: allNodeOutputs,
+            pipelineData: pipelineData,
+            stopped: true,
+            forceStopped: true,
+            message: 'Workflow killed by user. All processing stopped immediately.',
+            tokenUsage,
+            tokenLedger,
+            totalTokensUsed: tokenUsage.totalTokens,
+            totalCostIncurred: tokenUsage.totalCost,
+            totalWordsGenerated: tokenUsage.totalWords
+          }
+        }
+
+        const node = executionOrder[i]
+        
+        // DYNAMIC PROGRESS CALCULATION - NO HARDCODING
+        // Base progress on node position, but allow individual nodes to override
+        // Calculate progress based on node position with granular updates
+        const nodeStartProgress = (i / executionOrder.length) * 100
+        const nodeEndProgress = ((i + 1) / executionOrder.length) * 100
+        const progress = nodeStartProgress + 5 // Start with some progress for current node
+        const baseProgress = progress
+        const nodeProgress = progress
+        
+        stateManager.updateExecutionState(workflowId, {
+          currentNode: node.id,
+          progress: nodeProgress,
+          baseProgress: baseProgress,
+          nodeIndex: i,
+          totalNodes: executionOrder.length
+        })
+        
+        if (progressCallback) {
+          progressCallback({
+            nodeId: node.id,
+            nodeName: node.data.label,
+            progress: nodeProgress,
+            status: 'executing',
+            providerName: null, // Will be updated when AI call starts
+            baseProgress: baseProgress,
+            nodeIndex: i,
+            totalNodes: executionOrder.length,
+            // CRITICAL: Send completed nodeOutputs so frontend can mark steps as done
+            nodeResults: pipelineData.nodeOutputs || {}
+          })
+        }
+
+        try {
+          console.log(`🔍 EXECUTING NODE ${i + 1}/${executionOrder.length}: ${node.id} (${node.data.label || node.data.type})`)
+          console.log('  - Node type:', node.data.type)
+          console.log('  - Node dependencies:', incomingEdges?.get(node.id) || 'none')
+          console.log('  - Pipeline data before execution:', Object.keys(pipelineData.nodeOutputs || {}))
+          
+          // CRITICAL: Ensure this node should execute now
+          const dependencies = incomingEdges?.get(node.id) || []
+          const unmetDependencies = dependencies.filter(depId => !pipelineData.nodeOutputs[depId])
+          if (unmetDependencies.length > 0) {
+            console.error(`❌ EXECUTION ORDER ERROR: Node ${node.id} has unmet dependencies:`, unmetDependencies)
+            throw new Error(`Execution order violation: Node ${node.id} cannot execute before dependencies: ${unmetDependencies.join(', ')}`)
+          }
+          
+          // Execute individual node with pipeline data
+          const nodeOutput = await this.executeNode(node, pipelineData, workflowId, progressCallback)
+          
+          console.log('  - Node output:', nodeOutput)
+          
+          // Add node output to pipeline with execution order tracking
+          const decoratedNodeOutput = {
+            ...nodeOutput,
+            sequenceNumber: i + 1, // Track execution order for proper display
+            executionIndex: i,
+            totalNodes: executionOrder.length,
+            nodeName: node.data.label || node.data.type || node.id, // ENSURE NODE NAME IS PRESERVED
+            nodeType: node.data.type,
+            executedAt: new Date().toISOString()
+          }
+          pipelineData.nodeOutputs[node.id] = decoratedNodeOutput
+
+          // SURGICAL FIX: Preserve structural node outputs separately
+          // ANY structural node (detected via canEditStructure permission) must reach Content Writer even if intermediate nodes exist
+          preserveStructuralNodeOutputHelper(node, decoratedNodeOutput, pipelineData)
+
+          this.recordNodeTokenUsage(
+            workflowId,
+            {
+              nodeId: node.id,
+              nodeName: node.data.label || node.id,
+              nodeType: node.data.type
+            },
+            decoratedNodeOutput
+          )
+          
+          console.log(`✅ NODE COMPLETED: ${node.id} (sequence ${i + 1}/${executionOrder.length})`)
+          console.log('  - Output type:', nodeOutput.type)
+          console.log('  - Content length:', typeof nodeOutput.content === 'string' ? nodeOutput.content.length : 'N/A')
+          console.log('  - Pipeline now has:', Object.keys(pipelineData.nodeOutputs).length, 'completed nodes')
+          
+          // SURGICAL FIX: Only update lastNodeOutput if node produced actual content
+          // Skip gates/routing nodes that don't have content - they shouldn't overwrite Content Writer's output
+          const hasActualContent = nodeOutput.content && 
+                                   (typeof nodeOutput.content === 'string' || 
+                                    nodeOutput.allChapters || 
+                                    nodeOutput.chapters ||
+                                    nodeOutput.type === 'ai_generation')
+          const isGateOrRouting = nodeOutput.type === 'routing' || nodeOutput.type === 'condition_result'
+          
+          if (hasActualContent && !isGateOrRouting) {
+            pipelineData.lastNodeOutput = nodeOutput
+            console.log(`✅ UPDATED lastNodeOutput to ${node.id} (has content)`)
+          } else {
+            console.log(`⏭️ SKIPPING lastNodeOutput update for ${node.id} (${nodeOutput.type}) - no content or is routing node`)
+          }
+          
+          console.log('  - Pipeline data after execution:', pipelineData)
+          
+          // Update execution state
+          const updatedState = {
+            [`results.${node.id}`]: nodeOutput,
+            nodeOutputs: pipelineData.nodeOutputs,
+            structuralNodeOutputs: pipelineData.structuralNodeOutputs || {}, // SURGICAL FIX: Preserve structural node outputs in checkpoint
+            currentNodeIndex: i,
+            completedNodes: executionOrder.slice(0, i + 1).map(n => n.id)
+          }
+          stateManager.updateExecutionState(workflowId, updatedState)
+
+          // CREATE CHECKPOINT AFTER NODE COMPLETION
+          stateManager.createCheckpoint(workflowId, node.id, {
+            ...stateManager.executionState.get(workflowId),
+            ...updatedState
+          })
+
+          // PROPER COMPLETION PROGRESS - DYNAMIC CALCULATION
+          const completionProgress = ((i + 1) / executionOrder.length) * 100
+          
+          if (progressCallback) {
+            progressCallback({
+              nodeId: node.id,
+              nodeName: node.data.label,
+              progress: completionProgress, // DYNAMIC: Shows actual completion
+              status: 'completed',
+              output: nodeOutput,
+              nodeIndex: i + 1,
+              totalNodes: executionOrder.length,
+              isNodeComplete: true,
+              checkpointCreated: true, // Indicate checkpoint was created
+              // CRITICAL: Send updated nodeOutputs after this node completes
+              nodeResults: pipelineData.nodeOutputs || {}
+            })
+          }
+
+        } catch (error) {
+          const nodeError = {
+            nodeId: node.id,
+            nodeName: node.data.label,
+            error: error.message,
+            timestamp: new Date()
+          }
+          
+          // CRITICAL: Save checkpoint data to DB for resume functionality
+          const currentState = stateManager.getExecutionState(workflowId)
+          const checkpointData = {
+            nodeId: node.id,
+            nodeName: node.data.label,
+            nodeIndex: i,
+            nodeOutputs: pipelineData.nodeOutputs || {},
+            structuralNodeOutputs: pipelineData.structuralNodeOutputs || {}, // SURGICAL FIX: Preserve structural node outputs in checkpoint
+            userInput: pipelineData.userInput,
+            executionOrder: executionOrder.map(n => ({ id: n.id, type: n.data.type })),
+            completedNodes: executionOrder.slice(0, i).map(n => n.id),
+            failedAtNode: node.id,
+            timestamp: new Date().toISOString()
+          }
+          
+          // Save checkpoint to database - CRITICAL: Preserve existing execution_data
+          try {
+            const supabase = getSupabase()
+            
+            // First, get current execution_data to preserve it
+            const { data: currentExecData } = await supabase
+              .from('engine_executions')
+              .select('execution_data')
+              .eq('id', workflowId)
+              .single()
+            
+            // Merge checkpoint data with existing execution_data
+            const updatedExecutionData = {
+              ...(currentExecData?.execution_data || {}),
+              ...(currentState?.executionData || {}),
+              resumable: true,
+              checkpointData: checkpointData, // CRITICAL: This must be preserved
+              failedNodeId: node.id,
+              failedNodeName: node.data.label,
+              error: error.message,
+              status: 'failed',
+              nodeResults: pipelineData.nodeOutputs || {},
+              // Ensure checkpointData is always at top level for easy access
+              checkpointData: checkpointData
+            }
+            
+            const { error: updateError } = await supabase
+              .from('engine_executions')
+              .update({
+                execution_data: updatedExecutionData,
+                status: 'failed' // Also update status column
+              })
+              .eq('id', workflowId)
+            
+            if (updateError) {
+              console.error('❌ Failed to save checkpoint to DB:', updateError)
+              throw updateError // Don't fail silently - this is critical
+            }
+            
+            console.log(`💾 Checkpoint saved to DB for resume - failed at node: ${node.id}`, {
+              checkpointNodeOutputs: Object.keys(checkpointData.nodeOutputs || {}).length,
+              completedNodes: checkpointData.completedNodes?.length || 0
+            })
+          } catch (dbError) {
+            console.error('❌ CRITICAL: Failed to save checkpoint to DB:', dbError)
+            // Still save to in-memory state as backup
+            stateManager.updateExecutionState(workflowId, {
+              checkpointData: checkpointData,
+              checkpointSaveFailed: true,
+              checkpointSaveError: dbError.message
+            })
+            throw new Error(`Failed to save checkpoint: ${dbError.message}. Checkpoint saved to memory only.`)
+          }
+          
+          // PAUSE on failure instead of stopping - allow user to fix and resume
+          stateManager.updateExecutionState(workflowId, {
+            status: 'paused',
+            failedNodeId: node.id,
+            failedNodeName: node.data.label,
+            pauseReason: 'node_failure',
+            resumable: true,
+            checkpointData: checkpointData,
+            [`errors`]: [...(stateManager.executionState.get(workflowId)?.errors || []), nodeError]
+          })
+
+          if (progressCallback) {
+            progressCallback({
+              nodeId: node.id,
+              nodeName: node.data.label,
+              progress,
+              status: 'failed',
+              error: error.message,
+              pauseReason: 'node_failure',
+              resumable: true,
+              message: `Node failed - workflow can be resumed from previous node.`,
+              // Send nodeOutputs even on failure for partial results
+              nodeResults: pipelineData.nodeOutputs || {}
+            })
+          }
+
+          console.log(`⏸️ Workflow ${workflowId} paused due to node failure: ${node.data.label}`)
+          
+          // Wait for user to fix the issue and resume
+          await stateManager.waitForResume(workflowId)
+          
+          // After resume, retry the failed node or continue
+          console.log(`▶️ Workflow ${workflowId} resumed after node failure fix`)
+          
+          // Retry the current node after resume
+          i-- // Decrement to retry the same node
+          continue
+        }
+      }
+
+      // Mark execution as completed
+      stateManager.updateExecutionState(workflowId, {
+        status: 'completed',
+        endTime: new Date(),
+        progress: 100
+      })
+
+      // ENSURE FINAL 100% COMPLETION CALLBACK
+      if (progressCallback) {
+        progressCallback({
+          status: 'completed',
+          progress: 100, // GUARANTEED 100% completion
+          message: 'Workflow execution completed successfully',
+          nodeId: 'workflow-complete',
+          nodeName: 'Workflow Complete',
+          output: {
+            success: true,
+            results: pipelineData.nodeOutputs,
+            lastNodeOutput: pipelineData.lastNodeOutput,
+            nodeOutputs: pipelineData.nodeOutputs, // For deliverables access
+            metadata: {
+              totalNodes: executionOrder.length,
+              executionTime: Date.now() - startTime,
+              workflowId,
+              completedNodes: executionOrder.length,
+              successRate: 100
+            }
+          }
+        })
+      }
+
+      const finalTokenUsage = getTokenUsageSummaryHelper(stateManager, workflowId, pipelineData.nodeOutputs)
+      const finalTokenLedger = getTokenLedgerHelper(stateManager, workflowId, pipelineData.nodeOutputs)
+
+      pipelineData.tokenUsage = finalTokenUsage
+      pipelineData.tokenLedger = finalTokenLedger
+      pipelineData.totalTokensUsed = finalTokenUsage.totalTokens
+      pipelineData.totalCostIncurred = finalTokenUsage.totalCost
+      pipelineData.totalWordsGenerated = finalTokenUsage.totalWords
+
+      return pipelineData
+
+    } catch (error) {
+      // Save final error state with checkpoint data for resume
+      const currentState = stateManager.getExecutionState(workflowId)
+      if (currentState?.nodeOutputs) {
+        try {
+          const supabase = getSupabase()
+          await supabase
+            .from('engine_executions')
+            .update({
+              execution_data: {
+                ...(currentState?.executionData || {}),
+                resumable: true,
+                checkpointData: {
+                  nodeOutputs: currentState.nodeOutputs,
+                  userInput: currentState.userInput,
+                  completedNodes: currentState.completedNodes || [],
+                  failedAtNode: currentState.failedNodeId || 'unknown',
+                  timestamp: new Date().toISOString()
+                },
+                error: error.message,
+                status: 'failed'
+              }
+            })
+            .eq('id', workflowId)
+          console.log(`💾 Final checkpoint saved to DB for resume`)
+        } catch (dbError) {
+          console.error('❌ Failed to save final checkpoint:', dbError)
+        }
+      }
+      
+      stateManager.updateExecutionState(workflowId, {
+        status: 'error',
+        endTime: new Date(),
+        finalError: error.message
+      })
+      throw error
+    }
+  }
+
+  /**
+   * Resume execution from a failed checkpoint
+   * @param {string} executionId - Execution ID to resume
+   * @param {Array} nodes - Workflow nodes
+   * @param {Array} edges - Workflow edges
+   * @param {Function} progressCallback - Progress callback
+   * @returns {Object} Execution result
+   */
+  async resumeExecution(executionId, nodes, edges, progressCallback = null) {
+    try {
+      console.log(`🔄 Resuming execution: ${executionId}`)
+      
+      // FALLBACK 0: Check in-memory execution state first (if worker didn't restart)
+      const inMemoryState = stateManager.getExecutionState(executionId)
+      if (inMemoryState?.checkpointData?.nodeOutputs) {
+        console.log(`✅ Found checkpoint data in memory`)
+        const checkpointData = inMemoryState.checkpointData
+        const pipelineData = {
+          userInput: checkpointData.userInput || inMemoryState.userInput || {},
+          nodeOutputs: checkpointData.nodeOutputs || {},
+          structuralNodeOutputs: checkpointData.structuralNodeOutputs || {}, // SURGICAL FIX: Restore structural node outputs
+          lastNodeOutput: null
+        }
+        
+        const completedNodeIds = checkpointData.completedNodes || Object.keys(pipelineData.nodeOutputs)
+        if (completedNodeIds.length > 0) {
+          const lastCompletedNodeId = completedNodeIds[completedNodeIds.length - 1]
+          pipelineData.lastNodeOutput = checkpointData.nodeOutputs[lastCompletedNodeId] || null
+        }
+        
+        // SURGICAL FIX: Rebuild structuralNodeOutputs from nodeOutputs if not in checkpoint
+        rebuildStructuralNodeOutputsHelper(pipelineData)
+        
+        const executionOrder = this.calculateExecutionOrder(nodes, edges)
+        let resumeIndex = 0
+        if (checkpointData.failedAtNode) {
+          const failedNodeIndex = executionOrder.findIndex(n => n.id === checkpointData.failedAtNode)
+          if (failedNodeIndex > 0) {
+            resumeIndex = failedNodeIndex - 1
+          }
+        } else if (completedNodeIds.length > 0) {
+          const lastCompletedId = completedNodeIds[completedNodeIds.length - 1]
+          resumeIndex = executionOrder.findIndex(n => n.id === lastCompletedId)
+          if (resumeIndex === -1) resumeIndex = 0
+        }
+        
+        stateManager.updateExecutionState(executionId, {
+          status: 'running',
+          nodeOutputs: pipelineData.nodeOutputs,
+          resumed: true,
+          resumedFromNode: executionOrder[resumeIndex]?.id || null
+        })
+        
+        return await continueExecutionFromNodeHelper(
+          executionId,
+          nodes,
+          edges,
+          pipelineData.userInput,
+          progressCallback,
+          null,
+          resumeIndex,
+          pipelineData.nodeOutputs,
+          buildExecutionOrderHelper,
+          this.executeNode.bind(this)
+        )
+      }
+      
+      // Load checkpoint data from database
+      const supabase = getSupabase()
+      const { data: executionData, error } = await supabase
+        .from('engine_executions')
+        .select('execution_data, input_data, status')
+        .eq('id', executionId)
+        .single()
+      
+      if (error) {
+        throw new Error(`Failed to load execution data: ${error.message}`)
+      }
+      
+      // Log what we actually have in execution_data for debugging
+      console.log(`📊 Execution data structure:`, {
+        hasExecutionData: !!executionData.execution_data,
+        hasCheckpointData: !!executionData.execution_data?.checkpointData,
+        hasNodeResults: !!executionData.execution_data?.nodeResults,
+        executionDataKeys: executionData.execution_data ? Object.keys(executionData.execution_data) : []
+      })
+      
+      const checkpointData = executionData.execution_data?.checkpointData
+      if (!checkpointData || !checkpointData.nodeOutputs) {
+        throw new Error('No checkpoint data found - cannot resume')
+      }
+      
+      console.log(`📦 Loaded checkpoint:`, {
+        completedNodes: checkpointData.completedNodes?.length || 0,
+        failedAt: checkpointData.failedAtNode
+      })
+      
+      // Reconstruct pipeline data from checkpoint
+      const pipelineData = {
+        userInput: checkpointData.userInput || executionData.input_data || {},
+        nodeOutputs: checkpointData.nodeOutputs || {},
+        structuralNodeOutputs: checkpointData.structuralNodeOutputs || {}, // SURGICAL FIX: Restore structural node outputs
+        lastNodeOutput: null
+      }
+      
+      // Get the last completed node output
+      const completedNodeIds = checkpointData.completedNodes || []
+      if (completedNodeIds.length > 0) {
+        const lastCompletedNodeId = completedNodeIds[completedNodeIds.length - 1]
+        pipelineData.lastNodeOutput = checkpointData.nodeOutputs[lastCompletedNodeId] || null
+      }
+      
+      // SURGICAL FIX: Rebuild structuralNodeOutputs from nodeOutputs if not in checkpoint
+      rebuildStructuralNodeOutputsHelper(pipelineData)
+      
+      // Calculate execution order
+      const executionOrder = this.calculateExecutionOrder(nodes, edges)
+      
+      // Find the index to resume from (one step back from failed node)
+      let resumeIndex = 0
+      if (checkpointData.failedAtNode) {
+        const failedNodeIndex = executionOrder.findIndex(n => n.id === checkpointData.failedAtNode)
+        if (failedNodeIndex > 0) {
+          resumeIndex = failedNodeIndex - 1 // Resume from previous node
+          console.log(`⏮️ Resuming from node index ${resumeIndex} (one before failed node ${failedNodeIndex})`)
+        } else if (failedNodeIndex === 0) {
+          resumeIndex = 0 // Start from beginning if first node failed
+        }
+      } else {
+        // No failed node specified - resume from last completed node
+        if (completedNodeIds.length > 0) {
+          const lastCompletedId = completedNodeIds[completedNodeIds.length - 1]
+          resumeIndex = executionOrder.findIndex(n => n.id === lastCompletedId)
+          if (resumeIndex === -1) resumeIndex = 0
+        }
+      }
+      
+      // Update execution state
+      stateManager.updateExecutionState(executionId, {
+        status: 'running',
+        nodeOutputs: pipelineData.nodeOutputs,
+        resumed: true,
+        resumedFromNode: executionOrder[resumeIndex]?.id || null
+      })
+      
+      // Continue execution from resume point
+      return await continueExecutionFromNodeHelper(
+        executionId,
+        nodes,
+        edges,
+        pipelineData.userInput,
+        progressCallback,
+        null, // superAdminUser
+        resumeIndex,
+        pipelineData.nodeOutputs,
+        buildExecutionOrderHelper,
+        this.executeNode.bind(this)
+      )
+      
+    } catch (error) {
+      console.error('❌ Resume failed:', error)
+      throw error
+    }
+  }
+
+  // REMOVED: canSkipNode() extracted to workflow/utils/workflowUtils.js (Phase 7)
+  // Use canSkipNodeHelper() from workflow/utils/workflowUtils.js
+
+  /**
+   * Execute a single node with real AI processing
+   * @param {Object} node - Node to execute
+   * @param {Object} pipelineData - Current pipeline data
+   * @param {string} workflowId - Workflow execution ID
+   * @returns {Object} Node output
+   */
+  async executeNode(node, pipelineData, workflowId, progressCallback = null) {
+    console.log(`🔍 EXECUTING NODE: ${node.id} (${node.type}) - ${node.data.label}`)
+    console.log(`  - Pipeline data keys:`, Object.keys(pipelineData))
+    console.log(`  - Last node output:`, pipelineData.lastNodeOutput ? 'EXISTS' : 'NONE')
+    
+    // Check if this node can be skipped for optimization
+    const skipCheck = canSkipNodeHelper(node, pipelineData, workflowId, assessContentQualityHelper)
+    console.log(`  - Skip check result:`, skipCheck)
+    
+    if (skipCheck.skip) {
+      console.log(`⏭️ SKIPPING NODE ${node.id} (${node.type}): ${skipCheck.reason}`)
+      return {
+        success: true,
+        output: {
+          content: pipelineData.lastNodeOutput?.content || '',
+          skipped: true,
+          skipReason: skipCheck.reason,
+          ...skipCheck
+        },
+        metadata: {
+          nodeType: node.type,
+          processingTime: 0,
+          skipped: true,
+          skipReason: skipCheck.reason
+        }
+      }
+    }
+    const { type, data } = node
+    
+    switch (type) {
+      case 'input':
+        return await this.executeInputNode(data, pipelineData)
+      
+      case 'process':
+        {
+          const result = await this.executeProcessNode(data, pipelineData, progressCallback, workflowId)
+          // If this process produced images, wire them into storyContext for live display
+          try {
+            const imgs = result?.assets?.images
+            if (Array.isArray(imgs) && imgs.length > 0) {
+              pipelineData.storyContext = pipelineData.storyContext || { chapters: [], structural: {}, assets: { images: [] } }
+              const existing = Array.isArray(pipelineData.storyContext.assets?.images) ? pipelineData.storyContext.assets.images : []
+              pipelineData.storyContext.assets.images = existing.concat(imgs)
+              if (typeof progressCallback === 'function') {
+                progressCallback({
+                  nodeId: data.id,
+                  nodeName: data.label || data.id,
+                  status: 'executing',
+                  storyContext: pipelineData.storyContext
+                })
+              }
+            }
+          } catch (e) {
+            console.warn('⚠️ Image wiring skipped:', e?.message)
+          }
+          return result
+        }
+      
+      case 'preview':
+        return await this.executePreviewNode(data, pipelineData, progressCallback)
+      
+      case 'condition':
+        return await this.executeConditionNode(data, pipelineData)
+      
+      case 'output':
+        return await this.executeOutputNode(data, pipelineData)
+      
+      default:
+        throw new Error(`Unknown node type: ${type}`)
+    }
+  }
+
+  /**
+   * Execute input node - validate and structure user input
+   */
+  async executeInputNode(nodeData, pipelineData) {
+    const { userInput } = pipelineData
+    const { testInputEnabled, testInputValues, processingInstructions } = nodeData
+
+    // Use test input values if enabled, otherwise use regular userInput
+    const inputToUse = testInputEnabled && testInputValues ? testInputValues : userInput
+    
+    console.log('🔍 INPUT NODE JSON WRAPPER:')
+    console.log('  - Using processingInstructions from nodePalettes.js')
+    console.log('  - inputToUse:', inputToUse)
+
+    // Create JSON wrapper as per nodePalettes.js instructions
+    const jsonWrapper = {
+      user_input: sanitizeUserInputForNextNode(inputToUse),
+      metadata: {
+        node_id: nodeData.id || 'input-node',
+        timestamp: new Date().toISOString(),
+        status: 'processed',
+        workflow_type: nodeData.role || 'universal'
+      },
+      next_node_data: {
+        original_input: inputToUse,
+        processing_instructions: 'All user data wrapped and ready for next node'
+      }
+    }
+
+    console.log('🔍 JSON WRAPPER CREATED:', jsonWrapper)
+
+    return {
+      type: 'input_json_wrapper',
+      content: jsonWrapper,
+      nodeName: nodeData.label || 'Input Processing',
+      metadata: {
+        nodeId: nodeData.id || 'input-node',
+        nodeName: nodeData.label || 'Input Processing',
+        timestamp: new Date(),
+        wrapperCreated: true
+      }
+    }
+  }
+
+  /**
+   * Execute process node - call AI with real API requests
+   * DYNAMIC MULTI-CHAPTER SUPPORT: Reads userInput.chapterCount and follows node instructions
+   */
+  async executeProcessNode(nodeData, pipelineData, progressCallback = null, workflowId = null) {
+    const { 
+      aiEnabled, 
+      selectedModels, 
+      systemPrompt, 
+      userPrompt, 
+      temperature, 
+      maxTokens, 
+      inputInstructions,
+      processingInstructions
+    } = nodeData
+    
+    // PERMISSION ENFORCEMENT: Delegate to workflow permission service
+    const { role: nodeRole } = applyPermissions(nodeData, console)
+    
+    if (!aiEnabled) {
+      // Non-AI processing node
+      return this.executeNonAIProcessing(nodeData, pipelineData)
+    }
+
+    // STEP 1: RECEIVE - Get previous node output and store in previousNodePassover
+    const previousOutput = pipelineData.lastNodeOutput || pipelineData.userInput
+    const { userInput } = pipelineData
+    
+    // STEP 2: STORE - Store complete previous node data in previousNodePassover
+    const previousNodePassover = {
+      previousOutput: previousOutput,
+      originalUserInput: userInput,
+      timestamp: new Date().toISOString(),
+      nodeContext: 'stored_for_passover'
+    }
+    
+    // Add previousNodePassover to pipelineData for template processing
+    pipelineData.previousNodePassover = previousNodePassover
+    // Backward-compatible alias expected by prompts and templates
+    pipelineData.previous_node_output = previousNodePassover
+    
+    console.log('📦 PREVIOUS NODE PASSOVER: Stored previous data for context preservation')
+    console.log('   - Previous output keys:', Object.keys(previousOutput || {}))
+    console.log('   - User input keys:', Object.keys(userInput || {}))
+    
+    // CRITICAL: Extract user_input from JSON wrapper if available, otherwise fall back to userInput
+    let structuredData = userInput
+    
+    if (previousOutput?.content?.user_input) {
+      // Input node returned JSON wrapper - extract the user_input
+      structuredData = previousOutput.content.user_input
+      console.log('🔍 PROCESS NODE: Using user_input from JSON wrapper:', structuredData)
+    } else if (previousOutput?.structuredData) {
+      // Legacy fallback for old structuredData format
+      structuredData = previousOutput.structuredData
+      console.log('🔍 PROCESS NODE: Using legacy structuredData:', structuredData)
+    } else {
+      console.log('🔍 PROCESS NODE: Using direct userInput:', structuredData)
+    }
+    
+
+    // SURGICAL FIX: FORCE USER INPUT CHAPTER COUNT - Check user input FIRST, ignore preset contamination
+    let chapterCount = null
+    
+    // Priority 1: Direct user input (highest priority)
+    chapterCount = userInput.chapterCount || userInput.chapter_count || userInput['Chapter Count'] || userInput['Number of Chapters']
+    
+    // Priority 2: Structured data (from input node processing)  
+    if (!chapterCount) {
+      chapterCount = structuredData.chapterCount || structuredData.chapter_count || structuredData['Chapter Count'] || structuredData['Number of Chapters']
+    }
+    
+    console.log('🔍 CHAPTER COUNT EXTRACTION PRIORITY:')
+    console.log('  - userInput.chapter_count:', userInput.chapter_count)
+    console.log('  - userInput.chapterCount:', userInput.chapterCount)
+    console.log('  - structuredData.chapter_count:', structuredData.chapter_count)
+    console.log('  - FINAL chapterCount:', chapterCount)
+    
+    console.log('🔍 CHAPTER COUNT RAW EXTRACTION:', chapterCount, 'Type:', typeof chapterCount)
+    
+    // Parse chapter count if it's a string like "2-3" or "6-8" 
+    if (chapterCount && typeof chapterCount === 'string') {
+      if (chapterCount.includes('-')) {
+        // Take the higher number from ranges like "2-3" -> 3, "6-8" -> 8
+        const parts = chapterCount.split('-')
+        chapterCount = parseInt(parts[1]) || parseInt(parts[0]) || 1
+      } else {
+        chapterCount = parseInt(chapterCount) || 1
+      }
+    }
+    
+    console.log('🔍 CHAPTER COUNT AFTER PARSING:', chapterCount, 'Type:', typeof chapterCount)
+    
+    if (!chapterCount || chapterCount < 1) {
+      // NO AI DETERMINATION - Use sensible defaults based on content type
+      const wordCount = parseInt(structuredData.word_count || structuredData['Word Count'] || 2000)
+      
+      // Simple logical defaults without AI calls
+      if (wordCount <= 2000) {
+        chapterCount = 3
+      } else if (wordCount <= 5000) {
+        chapterCount = 4
+      } else if (wordCount <= 10000) {
+        chapterCount = 6
+      } else {
+        chapterCount = 8
+      }
+      
+      console.log('🔍 DEFAULT CHAPTER ASSIGNMENT:')
+      console.log('  - Word count:', wordCount)
+      console.log('  - Default chapters:', chapterCount)
+    } else {
+      console.log('🔍 USER-SPECIFIED CHAPTERS (RESPECTED):', chapterCount)
+    }
+    
+    console.log('🔍 CHAPTER COUNT DEBUG:')
+    console.log('  - structuredData:', structuredData)
+    console.log('  - structuredData.chapterCount:', structuredData.chapterCount)
+    console.log('  - structuredData.chapter_count:', structuredData.chapter_count)
+    console.log('  - structuredData["Chapter Count"]:', structuredData['Chapter Count'])
+    console.log('  - userInput.chapterCount:', userInput.chapterCount)
+    console.log('  - userInput.chapter_count:', userInput.chapter_count)
+    console.log('  - userInput["Chapter Count"]:', userInput['Chapter Count'])
+    console.log('  - Final chapterCount:', chapterCount)
+    console.log('  - Type:', typeof chapterCount)
+    
+    // CRITICAL: Distinguish between content generation and content refinement
+    // Use nodeRole from permission check above, with label-based fallback
+    const nodeLabel = (nodeData.label || '').toLowerCase()
+    const isLabelBasedWriter = nodeLabel.includes('writing') || 
+                               nodeLabel.includes('literary') || 
+                               nodeLabel.includes('narrative') || 
+                               nodeLabel.includes('content writer') ||
+                               nodeLabel.includes('technical writer') ||
+                               nodeLabel.includes('copywriter')
+    
+    const isContentWriter = nodeRole === 'content_writer' || 
+                           nodeRole === 'technical_writer' || 
+                           nodeRole === 'copywriter' ||
+                           isLabelBasedWriter
+    
+    const isEditor = nodeRole === 'editor'
+
+    console.log(`🔍 NODE ROLE CHECK: ${nodeRole}, isContentWriter: ${isContentWriter}, isEditor: ${isEditor}`)
+    console.log(`🔍 NODE LABEL: ${nodeData.label}`)
+    console.log(`🔍 LABEL-BASED WRITER DETECTION: ${isLabelBasedWriter}`)
+
+    // SURGICAL FIX: Detect image generation nodes and handle differently
+    const isImageNode = nodeRole === 'image_generator' || nodeRole === 'ecover_generator'
+    
+    if (isImageNode) {
+      // Image generation: Call specialized image generation handler
+      console.log(`🎨 STARTING IMAGE GENERATION (${nodeRole})`)
+      return await this.executeImageGeneration(nodeData, pipelineData, progressCallback, workflowId)
+    } else if (parseInt(chapterCount) > 1 && isContentWriter) {
+      // Multi-chapter generation: ONLY for content writing nodes
+      console.log(`🔍 STARTING MULTI-CHAPTER GENERATION: ${chapterCount} chapters`)
+      return await this.generateMultipleChapters(nodeData, pipelineData, parseInt(chapterCount), progressCallback, workflowId)
+    } else if (isEditor) {
+      // Content refinement: Editor processes existing content with checklist
+      console.log(`🔍 STARTING CONTENT REFINEMENT (Editor node)`)
+      return await this.executeContentRefinement(nodeData, pipelineData, progressCallback, workflowId)
+    } else {
+      // Single generation: For research, analysis, and other non-writing nodes
+      console.log(`🔍 STARTING SINGLE GENERATION (${isContentWriter ? 'content writer' : 'research/analysis node'})`)
+      return await this.executeSingleAIGeneration(nodeData, pipelineData, progressCallback, workflowId)
+    }
+  }
+
+  /**
+   * Generate multiple chapters based on user input and node instructions
+   * This follows the node's own instructions dynamically
+   */
+  async generateMultipleChapters(nodeData, pipelineData, chapterCount, progressCallback = null, workflowId = null) {
+    return generateMultipleChaptersHandler({
+      nodeData,
+            pipelineData,
+      chapterCount,
+      progressCallback,
+      workflowId,
+      helpers: {
+        isWorkflowStopped: stateManager.isWorkflowStopped,
+        checkDatabaseStopSignal: stateManager.checkDatabaseStopSignal,
+        convertResultsToNodeOutputs: convertResultsToNodeOutputsHelper,
+        processPromptVariables: (prompts, pipelineData, nodePermissions) => processPromptVariablesHelper({
+          prompts,
+          pipelineData,
+          nodePermissions,
+          sanitizeUserInputForNextNode,
+          logger: console
+        }),
+        parseModelConfig: parseModelConfigHelper,
+        getAIService: () => this.aiService,
+        extractChapterTitle: extractChapterTitleHelper
+      }
+    })
+  }
+
+  /**
+   * Execute single AI generation - used for both single chapters and individual chapters in multi-chapter mode
+   */
+  async executeSingleAIGeneration(nodeData, pipelineData, progressCallback = null, workflowId = null) {
+    return executeSingleAIGenerationHandler({
+      nodeData,
+      pipelineData,
+      progressCallback,
+      workflowId,
+      helpers: {
+        processPromptVariables: (prompts, pipelineData, nodePermissions) => processPromptVariablesHelper({
+          prompts,
+          pipelineData,
+          nodePermissions,
+          sanitizeUserInputForNextNode,
+          logger: console
+        }),
+        isWorkflowStopped: stateManager.isWorkflowStopped,
+        checkDatabaseStopSignal: stateManager.checkDatabaseStopSignal,
+        parseModelConfig: parseModelConfigHelper,
+        getAIService: () => this.aiService
+      }
+    })
+  }
+
+  // REMOVED: assessContentQuality() extracted to workflow/utils/workflowUtils.js (Phase 7)
+  // Use assessContentQualityHelper() from workflow/utils/workflowUtils.js
+  // Keeping method signature for backward compatibility - delegates to helper
+  // REMOVED: assessContentQuality() wrapper removed (Phase 8)
+  // Use assessContentQualityHelper() directly from workflow/utils/workflowUtils.js
+
+  /**
+   * Execute content refinement - Editor processes existing content with checklist
+   */
+  async executeContentRefinement(nodeData, pipelineData, progressCallback = null, workflowId = null) {
+    return executeContentRefinementHandler({
+      nodeData,
+      pipelineData,
+      progressCallback,
+      workflowId,
+      helpers: {
+        processPromptVariables: (prompts, pipelineData, nodePermissions) => processPromptVariablesHelper({
+          prompts,
+          pipelineData,
+          nodePermissions,
+          sanitizeUserInputForNextNode,
+          logger: console
+        }),
+        assessContentQuality: assessContentQualityHelper,
+        isWorkflowStopped: stateManager.isWorkflowStopped,
+        checkDatabaseStopSignal: stateManager.checkDatabaseStopSignal,
+        parseModelConfig: parseModelConfigHelper,
+        getAIService: () => this.aiService
+      }
+    })
+  }
+
+  /**
+   * Execute image generation - generate images using Gemini image models
+   */
+  async executeImageGeneration(nodeData, pipelineData, progressCallback = null, workflowId = null) {
+    return executeImageGenerationHandler({
+      nodeData,
+      pipelineData,
+      progressCallback,
+      workflowId,
+      parseModelConfig: parseModelConfigHelper,
+      getAIService: () => this.aiService
+    })
+  }
+
+  /**
+   * Build image generation prompt from story content and user preferences
+   */
+  /**
+   * Execute preview node - generate preview content for customer approval
+   */
+  async executePreviewNode(nodeData, pipelineData, progressCallback = null) {
+    return executePreviewNodeHandler({
+      nodeData,
+      pipelineData,
+      progressCallback,
+      helpers: {
+        processPromptVariables: (prompts, pipelineData, nodePermissions) => processPromptVariablesHelper({
+          prompts,
+          pipelineData,
+          nodePermissions,
+          sanitizeUserInputForNextNode,
+          logger: console
+        }),
+        parseModelConfig: parseModelConfigHelper,
+        getAIService: () => this.aiService
+      }
+    })
+  }
+
+  /**
+   * Execute condition node - evaluate conditions and route data
+   */
+  async executeConditionNode(nodeData, pipelineData) {
+    return executeConditionNodeHandler({
+      nodeData,
+      pipelineData,
+      helpers: {
+        evaluateCondition: evaluateConditionHelper,
+        executeConditionAction: (action, pipelineData) => executeConditionActionHelper(
+          action,
+          pipelineData,
+          processPromptVariablesHelper,
+          sanitizeUserInputForNextNode
+        )
+      }
+    })
+  }
+
+  /**
+   * Execute output node - format and deliver final results
+   * ORCHESTRATION ONLY: Delegates to outputHandler with helpers from outputHelpers.js
+   */
+  async executeOutputNode(nodeData, pipelineData) {
+    return executeOutputNodeHandler({
+      nodeData,
+      pipelineData,
+      helpers: {
+        compileWorkflowContent: (nodeOutputs, userInput) => {
+          try {
+            const compiled = compileWorkflowContentHelper(nodeOutputs, userInput)
+            console.log('📦 compileWorkflowContent summary:', {
+              sections: compiled.sections.length,
+              totalWords: compiled.totalWords,
+              totalCharacters: compiled.totalCharacters,
+              structuralKeys: Object.keys(compiled.structural || {})
+            })
+            return compiled
+          } catch (error) {
+            console.error('❌ compileWorkflowContent failed:', error)
+            throw error
+          }
+        },
+        formatFinalOutput: formatFinalOutputHelper,
+        generateDeliverables: (formattedOutput, nodeData) => generateDeliverablesHelper(formattedOutput, nodeData, getMimeTypeHelper)
+      }
+    })
+  }
+
+  /**
+   * Helper methods for execution
+   */
+  
+  // REMOVED: buildExecutionOrder() extracted to workflow/utils/executionOrderBuilder.js (Phase 8)
+  // Use buildExecutionOrderHelper() from workflow/utils/executionOrderBuilder.js
+
+  // REMOVED: validateInputFields() extracted to workflow/utils/workflowUtils.js (Phase 7)
+  // Use validateInputFieldsHelper() from workflow/utils/workflowUtils.js
+
+  // REMOVED: structureInputData(), uploadFileToSupabase() extracted to workflow/utils/inputProcessor.js (Phase 8)
+  // Use structureInputDataHelper(), uploadFileToSupabaseHelper() from workflow/utils/inputProcessor.js
+  async structureInputData(userInput, inputFields) {
+    return structureInputDataHelper(userInput, inputFields, (file, fieldName) => 
+      uploadFileToSupabaseHelper(file, fieldName, getSupabase)
+    )
+  }
+
+  // REMOVED: identifyMissingOptionals(), createNextNodeInstructions() already extracted to workflow/utils/workflowUtils.js (Phase 7)
+  // Use identifyMissingOptionalsHelper(), createNextNodeInstructionsHelper() from workflow/utils/workflowUtils.js
+
+  // REMOVED: processPromptVariables() - delegate wrapper, removed in Phase 6
+  // Use processPromptVariablesHelper() directly from workflow/promptService.js
+  
+  // REMOVED: generateChapterContext() - delegate wrapper, removed in Phase 6
+  // Use generateChapterContextHelper() directly from workflow/promptService.js
+
+  // REMOVED: parseModelConfig() wrapper removed (Phase 8)
+  // Use parseModelConfigHelper() directly from workflow/modelService.js
+
+  // REMOVED: compileWorkflowContent() - delegate wrapper with logging, removed in Phase 6
+  // Use compileWorkflowContentHelper() directly from workflow/contentCompiler.js
+  
+  // REMOVED: __extractChapterStructure() - delegate wrapper, removed in Phase 6
+  // Use extractChapterStructure() directly from workflow/contentCompiler.js
+
+  // REMOVED: formatFinalOutput, generateDeliverables, getMimeType methods
+  // EXTRACTED TO: workflow/helpers/outputHelpers.js (Phase 1.1)
+  // These methods are now imported and wired through executeOutputNode()
+  // See imports at top of file: formatFinalOutputHelper, generateDeliverablesHelper, getMimeTypeHelper
+
+  // REMOVED: Legacy format generation methods removed (Phase 8)
+  // All formatting now handled by professionalBookFormatter via outputHelpers.js
+  // REMOVED: generateMarkdownOutput, generateHTMLOutput, generatePlainTextOutput, 
+  // generatePDFOutput, generateEPUBOutput, generateDOCXOutput, generateXMLOutput,
+  // generateCSVOutput, generateYAMLOutput, generateRTFOutput, generateODTOutput,
+  // generateGenericOutput, generateFormatOutput
+  // Use formatFinalOutputHelper() from workflow/helpers/outputHelpers.js instead
+
+  // REMOVED: All state management methods extracted to workflow/state/executionStateManager.js
+  // Access via: stateManager.updateExecutionState(), stateManager.stopWorkflow(), etc.
+
+  async restartFromCheckpoint(workflowId, nodeId, nodes, edges, initialInput, progressCallback, superAdminUser) {
+    return await restartFromCheckpointHelper(
+      workflowId,
+      nodeId,
+      nodes,
+      edges,
+      initialInput,
+      progressCallback,
+      superAdminUser,
+      buildExecutionOrderHelper,
+      this.executeNode.bind(this),
+      this.restartFailedNode.bind(this),
+      this.continueExecutionFromNode.bind(this)
+    )
+  }
+
+  async restartFailedNode(workflowId, nodeId, nodes, edges, initialInput, progressCallback, superAdminUser) {
+    return await restartFailedNodeHelper(
+      workflowId,
+      nodeId,
+      nodes,
+      edges,
+      initialInput,
+      progressCallback,
+      superAdminUser,
+      buildExecutionOrderHelper,
+      this.executeNode.bind(this),
+      this.continueWorkflowFromNode.bind(this)
+    )
+  }
+
+  async continueWorkflowFromNode(workflowId, fromNodeId, nodes, edges, initialInput, progressCallback, superAdminUser) {
+    return await continueWorkflowFromNodeHelper(
+      workflowId,
+      fromNodeId,
+      nodes,
+      edges,
+      initialInput,
+      progressCallback,
+      superAdminUser,
+      buildExecutionOrderHelper,
+      this.executeNode.bind(this),
+      this.continueExecutionFromNode.bind(this)
+    )
+  }
+
+  async continueExecutionFromNode(workflowId, nodes, edges, initialInput, progressCallback, superAdminUser, startIndex, existingOutputs) {
+    return await continueExecutionFromNodeHelper(
+      workflowId,
+      nodes,
+      edges,
+      initialInput,
+      progressCallback,
+      superAdminUser,
+      startIndex,
+      existingOutputs,
+      buildExecutionOrderHelper,
+      this.executeNode.bind(this)
+    )
+  }
+
+  // REMOVED: Checkpoint/pause/resume methods extracted to workflow/state/executionStateManager.js
+  // Access via: stateManager.createCheckpoint(), stateManager.waitForResume(), etc.
+
+  
+  // REMOVED: Content helper methods extracted to workflow/helpers/contentHelpers.js (Phase 5)
+  // - convertResultsToNodeOutputs() → use convertResultsToNodeOutputsHelper()
+  // - extractChapterTitle() → use extractChapterTitleHelper()
+  // These are now imported from workflow/helpers/contentHelpers.js
+
+  // REMOVED: checkDatabaseStopSignal extracted to workflow/state/executionStateManager.js
+  // Access via: stateManager.checkDatabaseStopSignal()
+
+  recordNodeTokenUsage(workflowId, nodeMeta, nodeOutput) {
+    if (!workflowId || !nodeOutput) {
+      return
+    }
+
+    const metrics = deriveNodeTokenMetricsHelper(nodeOutput)
+    if (!metrics.hasData) {
+      return
+    }
+
+    // SURGICAL FIX: Ensure nodeOutput has token data directly for executionService.js to read
+    // This ensures nodeOutputs[nodeId].aiMetadata.tokens exists when executionService calculates totals
+    if (!nodeOutput.aiMetadata) {
+      nodeOutput.aiMetadata = {}
+    }
+    if (metrics.tokens > 0 && (!nodeOutput.aiMetadata.tokens || nodeOutput.aiMetadata.tokens === 0)) {
+      nodeOutput.aiMetadata.tokens = metrics.tokens
+    }
+    if (metrics.cost > 0 && (!nodeOutput.aiMetadata.cost || nodeOutput.aiMetadata.cost === 0)) {
+      nodeOutput.aiMetadata.cost = metrics.cost
+    }
+    if (metrics.words > 0 && (!nodeOutput.aiMetadata.words || nodeOutput.aiMetadata.words === 0)) {
+      nodeOutput.aiMetadata.words = metrics.words
+    }
+    // Also set at root level for compatibility
+    if (metrics.tokens > 0 && (!nodeOutput.tokens || nodeOutput.tokens === 0)) {
+      nodeOutput.tokens = metrics.tokens
+    }
+    if (!nodeOutput.aiMetadata.provider && metrics.provider) {
+      nodeOutput.aiMetadata.provider = metrics.provider
+    }
+    if (!nodeOutput.aiMetadata.model && metrics.model) {
+      nodeOutput.aiMetadata.model = metrics.model
+    }
+
+    const state = stateManager.getExecutionState(workflowId) || {}
+    const currentUsage = state.tokenUsage || { totalTokens: 0, totalCost: 0, totalWords: 0 }
+    const updatedUsage = {
+      totalTokens: currentUsage.totalTokens + metrics.tokens,
+      totalCost: currentUsage.totalCost + metrics.cost,
+      totalWords: currentUsage.totalWords + metrics.words
+    }
+
+    const ledgerEntry = {
+      nodeId: nodeMeta.nodeId,
+      nodeName: nodeMeta.nodeName,
+      nodeType: nodeMeta.nodeType,
+      tokens: metrics.tokens,
+      cost: metrics.cost,
+      words: metrics.words,
+      provider: metrics.provider || null,
+      model: metrics.model || null,
+      timestamp: new Date().toISOString()
+    }
+
+    const updatedLedger = Array.isArray(state.tokenLedger) ? [...state.tokenLedger, ledgerEntry] : [ledgerEntry]
+
+    stateManager.updateExecutionState(workflowId, {
+      tokenUsage: updatedUsage,
+      tokenLedger: updatedLedger
+    })
+  }
+
+  // REMOVED: Token helper methods extracted to workflow/helpers/tokenHelpers.js (Phase 3)
+  // - deriveNodeTokenMetrics() → use deriveNodeTokenMetricsHelper()
+  // - calculateTokenUsageFromOutputs() → use calculateTokenUsageFromOutputsHelper()
+  // - buildTokenLedgerFromOutputs() → use buildTokenLedgerFromOutputsHelper()
+  // - extractNumericValue() → use extractNumericValueHelper()
+  // - getTokenUsageSummary() → use getTokenUsageSummaryHelper(stateManager, workflowId, nodeOutputs)
+  // - getTokenLedger() → use getTokenLedgerHelper(stateManager, workflowId, nodeOutputs)
+  // These are now imported from workflow/helpers/tokenHelpers.js
+  
+  // KEPT: recordNodeTokenUsage() - uses stateManager, stays in class
+
+  // REMOVED: __sanitizeUserInputForNextNode() - delegate wrapper, removed in Phase 6
+  // Use sanitizeUserInputForNextNode() directly from workflow/inputSanitizer.js
+
+
+  // REMOVED: clearAllExecutions, killStuckExecutions extracted to workflow/state/executionStateManager.js
+  // Access via: stateManager.clearAllExecutions(), stateManager.killStuckExecutions()
+}
+
+const workflowExecutionService = new WorkflowExecutionService()
+
+module.exports = workflowExecutionService

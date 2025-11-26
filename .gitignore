@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+vps-worker/node_modules/
+execution-worker/node_modules/
+.cache/
+temp/
+*.sql.backup
+*.js.backup
+*.js.bak
+*.js.old.js
+# Archive directories to prevent context overload
+archived_context/
+chat_exports/
+
+# Large files that cause performance issues
+*.md.backup
+*.md.old
+
+db/sql-scripts/disable_storage_rls_temp.sql

@@ -1,0 +1,355 @@
+import React, { useState, useEffect } from 'react'
+import { X, Save, Trash2, Brain, Settings, Play, Eye } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
+import toast from 'react-hot-toast'
+import { getAlchemistVariablesByType, getAllAlchemistVariables } from '../../data/alchemistVariables'
+
+const AlchemistFlowNodeModal = ({ isOpen, onClose, node, onSave, onDelete }) => {
+  const [nodeConfig, setNodeConfig] = useState({})
+  const [activeTab, setActiveTab] = useState('basic')
+  const [availableModels, setAvailableModels] = useState([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (node && isOpen) {
+      setNodeConfig({
+        label: node.data.label || '',
+        description: node.data.description || '',
+        contentType: node.data.contentType || '',
+        tone: node.data.tone || '',
+        targetAudience: node.data.targetAudience || '',
+        aiModel: node.data.aiModel || '',
+        systemPrompt: node.data.systemPrompt || '',
+        userPrompt: node.data.userPrompt || '',
+        instructions: node.data.instructions || '',
+        variables: node.data.variables || {},
+        ...node.data
+      })
+      fetchAvailableModels()
+    }
+  }, [node, isOpen])
+
+  const fetchAvailableModels = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('ai_model_metadata')
+        .select('*')
+        .eq('is_active', true)
+        .order('provider_name', { ascending: true })
+
+      if (error) throw error
+      setAvailableModels(data || [])
+    } catch (error) {
+      console.error('Error fetching AI models:', error)
+    }
+  }
+
+  const handleSave = () => {
+    if (!nodeConfig.label?.trim()) {
+      toast.error('Node label is required')
+      return
+    }
+    onSave(node.id, nodeConfig)
+  }
+
+  const handleDelete = () => {
+    if (confirm(`Delete "${node.data.label}" node?`)) {
+      onDelete(node.id)
+      onClose()
+    }
+  }
+
+  const updateConfig = (key, value) => {
+    setNodeConfig(prev => ({ ...prev, [key]: value }))
+  }
+
+  const getNodeTypeColor = (type) => {
+    switch (type) {
+      case 'inputMaster': return 'from-blue-500 to-blue-700'
+      case 'processMaster': return 'from-green-500 to-green-700'
+      case 'conditionMaster': return 'from-yellow-500 to-yellow-700'
+      case 'structuralMaster': return 'from-purple-500 to-purple-700'
+      case 'outputMaster': return 'from-pink-500 to-pink-700'
+      default: return 'from-gray-500 to-gray-700'
+    }
+  }
+
+  const getNodeTypeIcon = (type) => {
+    switch (type) {
+      case 'inputMaster': return '📝'
+      case 'processMaster': return '⚙️'
+      case 'conditionMaster': return '🔀'
+      case 'structuralMaster': return '🏗️'
+      case 'outputMaster': return '📤'
+      default: return '📦'
+    }
+  }
+
+  if (!isOpen || !node) return null
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-gray-900 rounded-xl w-[800px] max-h-[600px] flex flex-col">
+        {/* Header */}
+        <div className={`flex items-center justify-between p-6 border-b border-gray-700 bg-gradient-to-r ${getNodeTypeColor(node.type)}`}>
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">{getNodeTypeIcon(node.type)}</span>
+            <div>
+              <h2 className="text-2xl font-bold text-white">{node.data.label}</h2>
+              <p className="text-white/80">{node.type} Node Configuration</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSave}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+            >
+              <Save className="w-4 h-4" />
+              Save
+            </button>
+            <button
+              onClick={handleDelete}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+            >
+              <X className="w-6 h-6 text-white" />
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-gray-700">
+          {['basic', 'content', 'ai', 'advanced'].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-6 py-3 font-medium transition-colors capitalize ${
+                activeTab === tab
+                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {activeTab === 'basic' && (
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Node Label
+                </label>
+                <input
+                  type="text"
+                  value={nodeConfig.label || ''}
+                  onChange={(e) => updateConfig('label', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  placeholder="Enter node label..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Description
+                </label>
+                <textarea
+                  value={nodeConfig.description || ''}
+                  onChange={(e) => updateConfig('description', e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  placeholder="Describe what this node does..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Instructions
+                </label>
+                <textarea
+                  value={nodeConfig.instructions || ''}
+                  onChange={(e) => updateConfig('instructions', e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  placeholder="Detailed instructions for this node..."
+                />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'content' && (
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Content Type
+                </label>
+                <select
+                  value={nodeConfig.contentType || ''}
+                  onChange={(e) => updateConfig('contentType', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Select content type...</option>
+                  {node.data.inputOptions?.contentTypes?.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.name} - {type.description}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Tone
+                </label>
+                <select
+                  value={nodeConfig.tone || ''}
+                  onChange={(e) => updateConfig('tone', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Select tone...</option>
+                  {node.data.inputOptions?.tones?.map((tone) => (
+                    <option key={tone.id} value={tone.id}>
+                      {tone.name} - {tone.description}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Target Audience
+                </label>
+                <select
+                  value={nodeConfig.targetAudience || ''}
+                  onChange={(e) => updateConfig('targetAudience', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Select target audience...</option>
+                  {node.data.inputOptions?.targetAudiences?.map((audience) => (
+                    <option key={audience} value={audience}>
+                      {audience}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'ai' && (
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  AI Model
+                </label>
+                <select
+                  value={nodeConfig.aiModel || ''}
+                  onChange={(e) => updateConfig('aiModel', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Select AI model...</option>
+                  {availableModels.map((model) => (
+                    <option key={model.id} value={model.model_name}>
+                      {model.provider_name} - {model.model_name} (${model.input_cost_per_token})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  System Prompt
+                </label>
+                <textarea
+                  value={nodeConfig.systemPrompt || ''}
+                  onChange={(e) => updateConfig('systemPrompt', e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  placeholder="System prompt for AI model..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  User Prompt Template
+                </label>
+                <textarea
+                  value={nodeConfig.userPrompt || ''}
+                  onChange={(e) => updateConfig('userPrompt', e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  placeholder="User prompt template with variables..."
+                />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'advanced' && (
+            <div className="space-y-6">
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="text-lg font-medium text-white mb-4">Node Settings</h3>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-300">AI Enabled</span>
+                    <input
+                      type="checkbox"
+                      checked={nodeConfig.aiEnabled || false}
+                      onChange={(e) => updateConfig('aiEnabled', e.target.checked)}
+                      className="rounded"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Max Tokens
+                    </label>
+                    <input
+                      type="number"
+                      value={nodeConfig.maxTokens || ''}
+                      onChange={(e) => updateConfig('maxTokens', parseInt(e.target.value))}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                      placeholder="2000"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Temperature
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="2"
+                      value={nodeConfig.temperature || ''}
+                      onChange={(e) => updateConfig('temperature', parseFloat(e.target.value))}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                      placeholder="0.7"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="text-lg font-medium text-white mb-4">Node Variables</h3>
+                <pre className="text-xs text-gray-400 bg-gray-900 p-3 rounded overflow-auto">
+                  {JSON.stringify(nodeConfig.variables || {}, null, 2)}
+                </pre>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default AlchemistFlowNodeModal

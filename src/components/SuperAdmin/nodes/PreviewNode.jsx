@@ -1,0 +1,102 @@
+import React, { useState } from 'react'
+import { Handle, Position } from 'reactflow'
+import { ChevronRight, ChevronDown, Eye, RefreshCw } from 'lucide-react'
+
+const PreviewNode = ({ data }) => {
+  const [expanded, setExpanded] = useState(false)
+
+  const getColorClasses = (color) => {
+    switch (color) {
+      case 'blue':
+        return 'border-blue-400 bg-blue-900/20 text-blue-200'
+      case 'green':
+        return 'border-green-400 bg-green-900/20 text-green-200'
+      case 'purple':
+        return 'border-purple-400 bg-purple-900/20 text-purple-200'
+      case 'pink':
+        return 'border-pink-400 bg-pink-900/20 text-pink-200'
+      case 'orange':
+        return 'border-orange-400 bg-orange-900/20 text-orange-200'
+      case 'yellow':
+        return 'border-yellow-400 bg-yellow-900/20 text-yellow-200'
+      default:
+        return 'border-gray-400 bg-gray-900/20 text-gray-200'
+    }
+  }
+
+  return (
+    <div className={`min-w-[200px] border-2 rounded-lg p-3 ${getColorClasses(data.color)}`}>
+      {/* Input Handle */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="w-3 h-3 bg-gray-400 border-2 border-gray-600"
+      />
+      
+      {/* Node Header */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Eye className="w-5 h-5" />
+          <span className="font-semibold text-sm">{data.label}</span>
+        </div>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-gray-400 hover:text-white transition-colors"
+        >
+          {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        </button>
+      </div>
+      
+      {/* Node Type Badge */}
+      <div className="text-xs opacity-75 mb-2">Preview Node</div>
+      
+      {/* Expandable Content */}
+      {expanded && (
+        <div className="mt-3 pt-3 border-t border-current/20">
+          <div className="space-y-2">
+            {data.maxAttempts && (
+              <div>
+                <div className="text-xs font-medium">Max Attempts:</div>
+                <div className="text-xs bg-black/20 rounded px-2 py-1 mt-1">
+                  {data.maxAttempts}
+                </div>
+              </div>
+            )}
+            
+            {data.previewLength && (
+              <div>
+                <div className="text-xs font-medium">Preview Length:</div>
+                <div className="text-xs bg-black/20 rounded px-2 py-1 mt-1">
+                  {data.previewLength}
+                </div>
+              </div>
+            )}
+            
+            {data.services && (
+              <div>
+                <div className="text-xs font-medium">AI Services:</div>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {data.services.map((service, index) => (
+                    <span key={index} className="text-xs bg-black/20 rounded px-2 py-1">
+                      {service}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Output Handle */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="w-3 h-3 bg-gray-400 border-2 border-gray-600"
+      />
+    </div>
+  )
+}
+
+export default PreviewNode
+

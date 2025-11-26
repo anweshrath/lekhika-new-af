@@ -1,0 +1,63 @@
+:root {
+  /* Surface and background tokens */
+  --bg-surface: var(--bg-elevated, rgba(17, 24, 39, 0.6));
+  --bg-surface-hover: color-mix(in oklab, var(--bg-surface) 85%, #ffffff 15%);
+  --border-subtle: var(--border-subtle, rgba(255, 255, 255, 0.08));
+  --border-strong: var(--border-strong, rgba(255, 255, 255, 0.16));
+  --text-primary: var(--text-primary, #e5e7eb);
+  --text-secondary: var(--text-secondary, #b6b8bd);
+  --text-muted: var(--text-muted, #9ca3af);
+  --shadow-soft: 0 6px 28px rgba(0, 0, 0, 0.25);
+}
+
+/* Surface utilities */
+.bg-surface { background: var(--bg-surface); }
+.bg-surface-hover { background: var(--bg-surface-hover); }
+.border-subtle { border-color: var(--border-subtle) !important; }
+.border-strong { border-color: var(--border-strong) !important; }
+.text-secondary { color: var(--text-secondary) !important; }
+.text-muted { color: var(--text-muted) !important; }
+.shadow-soft { box-shadow: var(--shadow-soft); }
+
+/* Motion utilities */
+.hoverLift { transition: transform 180ms ease, box-shadow 180ms ease; }
+.hoverLift:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+
+/* Role gradients (can be applied to chips/badges) */
+.role-gradient-input { background-image: linear-gradient(90deg, #60a5fa, #2563eb); color: #fff; }
+.role-gradient-process { background-image: linear-gradient(90deg, #34d399, #059669); color: #fff; }
+.role-gradient-condition { background-image: linear-gradient(90deg, #f59e0b, #ea580c); color: #1f2937; }
+.role-gradient-preview { background-image: linear-gradient(90deg, #22d3ee, #06b6d4); color: #0b1020; }
+.role-gradient-output { background-image: linear-gradient(90deg, #a78bfa, #7c3aed); color: #fff; }
+
+/* Focus rings (applied to inputs/buttons as needed) */
+.focus-ring { outline: none; box-shadow: 0 0 0 2px color-mix(in oklab, #3b82f6 70%, #60a5fa 30%); }
+.focus-ring:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, #3b82f6 70%, #60a5fa 30%); }
+
+/* Reduced motion safety for shimmers/animations */
+@media (prefers-reduced-motion: reduce) {
+  .hoverLift, .hoverLift:hover { transition: none; transform: none; box-shadow: none; }
+}
+
+/* SuperAdmin dark theme scope: higher contrast, darker surfaces */
+.superadmin-theme {
+  --bg-surface: rgba(8, 12, 20, 0.96);
+  --bg-surface-hover: rgba(16, 24, 40, 0.9);
+  --border-subtle: rgba(255, 255, 255, 0.14);
+  --border-strong: rgba(255, 255, 255, 0.24);
+  --text-primary: #f3f4f6;   /* brighter */
+  --text-secondary: #d1d5db; /* brighter secondary */
+  --text-muted: #aeb5bf;
+  --shadow-soft: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* Scoped overrides to fix low-contrast legacy classes inside SuperAdmin */
+.superadmin-theme .text-gray-200 { color: var(--text-primary) !important; }
+.superadmin-theme .text-gray-300 { color: var(--text-secondary) !important; }
+.superadmin-theme .text-gray-400 { color: var(--text-muted) !important; }
+.superadmin-theme .border-gray-600 { border-color: var(--border-subtle) !important; }
+.superadmin-theme .border-gray-700 { border-color: var(--border-subtle) !important; }
+.superadmin-theme .bg-gray-700\/50 { background-color: var(--bg-surface-hover) !important; }
+.superadmin-theme .bg-gray-800\/60 { background-color: var(--bg-surface) !important; }
+
+

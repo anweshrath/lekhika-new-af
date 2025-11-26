@@ -1,0 +1,1203 @@
+/**
+ * ALCHEMIST NODE PALETTE
+ * Specialized node palette for content creation workflows
+ * Contains content-specific nodes optimized for different content types
+ */
+
+import React, { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { 
+  X, FileText, TrendingUp, Mail, Users, Target, 
+  Lightbulb, Megaphone, Video, BookOpen, Zap,
+  Search, Filter, ChevronDown, ChevronUp, Settings,
+  PenTool, Image, CheckCircle, Calendar, Download,
+  RefreshCw
+} from 'lucide-react'
+import { alchemistNodePaletteService } from '../../services/alchemistNodePaletteService'
+
+const AlchemistNodePalette = ({ isOpen, onClose, onNodeSelect }) => {
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('all')
+  const [expandedCategories, setExpandedCategories] = useState({})
+  const [nodeTypes, setNodeTypes] = useState([])
+  const [categories, setCategories] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+
+  // Load node types from database
+  useEffect(() => {
+    if (isOpen) {
+      loadNodeTypes()
+    }
+  }, [isOpen])
+
+  const loadNodeTypes = async () => {
+    setLoading(true)
+    try {
+         // ALL ALCHEMIST NODES - MASTER + SUB-NODES FOR EACH TEMPLATE TYPE
+         const hardcodedNodes = [
+           // ===== MASTER NODES =====
+           {
+             node_id: 'inputMaster',
+             name: 'Input Master',
+             description: 'Dynamic input collection with AI validation',
+             type: 'inputMaster',
+             category: 'input',
+             sub_category: 'master',
+             role: 'input',
+             icon: '📝',
+             gradient: 'from-blue-500 to-blue-700',
+             is_ai_enabled: true,
+             configuration: {
+               inputFields: ['topic', 'target_audience', 'tone', 'word_count'],
+               aiIntegration: { enabled: true, validation: true, suggestions: true },
+               features: ['Dynamic Fields', 'AI Validation', 'Auto Suggestions']
+             }
+           },
+           {
+             node_id: 'processMaster',
+             name: 'Process Master',
+             description: 'AI-powered content processing and generation',
+             type: 'processMaster',
+             category: 'process',
+             sub_category: 'master',
+             role: 'process',
+             icon: '⚙️',
+             gradient: 'from-green-500 to-green-700',
+             is_ai_enabled: true,
+             configuration: {
+               processingModes: ['writing', 'research', 'editing', 'optimization'],
+               aiIntegration: { enabled: true, models: ['gpt-4o', 'claude-3'], qualityLevel: 'high' },
+               features: ['Multi-Mode Processing', 'AI Integration', 'Quality Control']
+             }
+           },
+           {
+             node_id: 'conditionMaster',
+             name: 'Condition Master',
+             description: 'Logical gates and conditional processing',
+             type: 'conditionMaster',
+             category: 'condition',
+             sub_category: 'master',
+             role: 'condition',
+             icon: '🔀',
+             gradient: 'from-yellow-500 to-yellow-700',
+             is_ai_enabled: true,
+             configuration: {
+               logicalGates: ['if_else', 'and', 'or', 'not'],
+               aiIntegration: { enabled: true, logicMode: 'advanced', fallbackAction: 'skip' },
+               features: ['Logical Gates', 'AI Logic', 'Fallback Actions']
+             }
+           },
+           {
+             node_id: 'structuralMaster',
+             name: 'Structural Master',
+             description: 'Blueprint and content organization',
+             type: 'structuralMaster',
+             category: 'structural',
+             sub_category: 'master',
+             role: 'structural',
+             icon: '🏗️',
+             gradient: 'from-purple-500 to-purple-700',
+             is_ai_enabled: true,
+             configuration: {
+               blueprints: ['blog_series', 'sales_funnel', 'email_sequence'],
+               aiIntegration: { enabled: true, structureMode: 'dynamic', autoArrange: true },
+               features: ['Blueprint Management', 'Dynamic Structure', 'Auto Arrange']
+             }
+           },
+           {
+             node_id: 'outputMaster',
+             name: 'Output Master',
+             description: 'Multi-format content delivery',
+             type: 'outputMaster',
+             category: 'output',
+             sub_category: 'master',
+             role: 'output',
+             icon: '📤',
+             gradient: 'from-red-500 to-red-700',
+             is_ai_enabled: true,
+             configuration: {
+               outputTypes: [{ name: 'Preview', icon: '👁️' }, { name: 'Publish', icon: '🚀' }, { name: 'Download', icon: '💾' }],
+               aiIntegration: { enabled: true, optimization: true, formatting: true },
+               features: ['Multi-Format', 'AI Optimization', 'Platform Integration']
+             }
+           },
+
+           // ===== CONTENT CREATION SUB-NODES =====
+           {
+             node_id: 'blogPostGen',
+             name: 'Blog Post Generator',
+             description: 'Create engaging blog posts with SEO optimization',
+             type: 'blogPostGenerator',
+             category: 'content',
+             sub_category: 'blog',
+             role: 'process',
+             icon: '📝',
+             gradient: 'from-blue-400 to-blue-600',
+             is_ai_enabled: true,
+             configuration: {
+               template: 'blog-post',
+               inputFields: ['topic', 'target_audience', 'tone', 'keywords', 'word_count'],
+               aiIntegration: { enabled: true, models: ['gpt-4o', 'claude-3'], optimization: 'seo' },
+               features: ['SEO Optimization', 'Keyword Integration', 'Readability Analysis']
+             }
+           },
+           {
+             node_id: 'videoScriptGen',
+             name: 'Video Script Writer',
+             description: 'Write compelling video scripts for any platform',
+             type: 'videoScriptWriter',
+             category: 'content',
+             sub_category: 'video',
+             role: 'process',
+             icon: '🎬',
+             gradient: 'from-purple-400 to-purple-600',
+             is_ai_enabled: true,
+             configuration: {
+               template: 'video-script',
+               inputFields: ['video_type', 'duration', 'topic', 'call_to_action', 'platform'],
+               aiIntegration: { enabled: true, models: ['gpt-4o', 'claude-3'], optimization: 'engagement' },
+               features: ['Platform Optimization', 'Hook Generation', 'CTA Integration']
+             }
+           },
+           {
+             node_id: 'caseStudyGen',
+             name: 'Case Study Writer',
+             description: 'Create compelling case studies that build trust',
+             type: 'caseStudyWriter',
+             category: 'content',
+             sub_category: 'case_study',
+             role: 'process',
+             icon: '📊',
+             gradient: 'from-green-400 to-green-600',
+             is_ai_enabled: true,
+             configuration: {
+               template: 'case-study',
+               inputFields: ['client', 'challenge', 'solution', 'results', 'metrics'],
+               aiIntegration: { enabled: true, models: ['gpt-4o', 'claude-3'], optimization: 'credibility' },
+               features: ['Results Highlighting', 'Metric Integration', 'Trust Building']
+             }
+           },
+
+           // ===== MARKETING SUB-NODES =====
+           {
+             node_id: 'emailSeqGen',
+             name: 'Email Sequence Generator',
+             description: 'Build automated email sequences that nurture leads',
+             type: 'emailSequenceGenerator',
+             category: 'marketing',
+             sub_category: 'email',
+             role: 'process',
+             icon: '📧',
+             gradient: 'from-indigo-400 to-indigo-600',
+             is_ai_enabled: true,
+             configuration: {
+               template: 'email-sequence',
+               inputFields: ['product_service', 'audience', 'goal', 'sequence_length', 'tone'],
+               aiIntegration: { enabled: true, models: ['gpt-4o', 'claude-3'], optimization: 'conversion' },
+               features: ['Sequence Planning', 'Personalization', 'A/B Testing']
+             }
+           },
+           {
+             node_id: 'socialMediaGen',
+             name: 'Social Media Generator',
+             description: 'Generate engaging posts for all social platforms',
+             type: 'socialMediaGenerator',
+             category: 'marketing',
+             sub_category: 'social',
+             role: 'process',
+             icon: '📱',
+             gradient: 'from-pink-400 to-pink-600',
+             is_ai_enabled: true,
+             configuration: {
+               template: 'social-media',
+               inputFields: ['platform', 'topic', 'tone', 'call_to_action', 'hashtags'],
+               aiIntegration: { enabled: true, models: ['gpt-4o', 'claude-3'], optimization: 'engagement' },
+               features: ['Platform Adaptation', 'Hashtag Generation', 'Viral Potential']
+             }
+           },
+           {
+             node_id: 'adCopyGen',
+             name: 'Ad Copy Generator',
+             description: 'Create scroll-stopping ad copy that converts',
+             type: 'adCopyGenerator',
+             category: 'marketing',
+             sub_category: 'ads',
+             role: 'process',
+             icon: '📢',
+             gradient: 'from-orange-400 to-orange-600',
+             is_ai_enabled: true,
+             configuration: {
+               template: 'ad-copy',
+               inputFields: ['product', 'audience', 'objective', 'platform', 'budget'],
+               aiIntegration: { enabled: true, models: ['gpt-4o', 'claude-3'], optimization: 'conversion' },
+               features: ['Hook Creation', 'CTA Optimization', 'Compliance Check']
+             }
+           },
+
+           // ===== SALES SUB-NODES =====
+           {
+             node_id: 'salesPageGen',
+             name: 'Sales Page Generator',
+             description: 'Write high-converting sales pages that sell',
+             type: 'salesPageGenerator',
+             category: 'sales',
+             sub_category: 'sales_page',
+             role: 'process',
+             icon: '💰',
+             gradient: 'from-red-400 to-red-600',
+             is_ai_enabled: true,
+             configuration: {
+               template: 'sales-copy',
+               inputFields: ['product', 'benefits', 'target_market', 'price_point', 'guarantees'],
+               aiIntegration: { enabled: true, models: ['gpt-4o', 'claude-3'], optimization: 'conversion' },
+               features: ['Persuasion Framework', 'Objection Handling', 'Urgency Creation']
+             }
+           },
+           {
+             node_id: 'landingPageGen',
+             name: 'Landing Page Generator',
+             description: 'Write high-converting landing page copy',
+             type: 'landingPageGenerator',
+             category: 'sales',
+             sub_category: 'landing',
+             role: 'process',
+             icon: '🎯',
+             gradient: 'from-yellow-400 to-yellow-600',
+             is_ai_enabled: true,
+             configuration: {
+               template: 'landing-page',
+               inputFields: ['offer', 'target_audience', 'benefits', 'social_proof', 'form_fields'],
+               aiIntegration: { enabled: true, models: ['gpt-4o', 'claude-3'], optimization: 'conversion' },
+               features: ['Above Fold Optimization', 'Form Optimization', 'Trust Signals']
+             }
+           },
+           {
+             node_id: 'productDescGen',
+             name: 'Product Description Generator',
+             description: 'Write compelling product descriptions that sell',
+             type: 'productDescriptionGenerator',
+             category: 'sales',
+             sub_category: 'product',
+             role: 'process',
+             icon: '🛍️',
+             gradient: 'from-teal-400 to-teal-600',
+             is_ai_enabled: true,
+             configuration: {
+               template: 'product-description',
+               inputFields: ['product_name', 'features', 'benefits', 'target_customer', 'price'],
+               aiIntegration: { enabled: true, models: ['gpt-4o', 'claude-3'], optimization: 'conversion' },
+               features: ['Feature to Benefit Translation', 'SEO Keywords', 'Emotional Triggers']
+             }
+           },
+
+           // ===== PR SUB-NODE =====
+           {
+             node_id: 'pressReleaseGen',
+             name: 'Press Release Generator',
+             description: 'Generate professional press releases for media coverage',
+             type: 'pressReleaseGenerator',
+             category: 'pr',
+             sub_category: 'press',
+             role: 'process',
+             icon: '📰',
+             gradient: 'from-emerald-400 to-emerald-600',
+             is_ai_enabled: true,
+             configuration: {
+               template: 'press-release',
+               inputFields: ['company', 'news_event', 'key_details', 'contact_info', 'quotes'],
+               aiIntegration: { enabled: true, models: ['gpt-4o', 'claude-3'], optimization: 'media_appeal' },
+               features: ['Media Format', 'Quote Generation', 'Contact Integration']
+             }
+           },
+
+           // ===== INPUT SUB-NODES =====
+           {
+             node_id: 'textPromptInput',
+             name: 'Text Prompt Input',
+             description: 'Freeform text, keywords, briefs collection',
+             type: 'textPromptInput',
+             category: 'input',
+             sub_category: 'text',
+             role: 'input',
+             icon: '📝',
+             gradient: 'from-blue-400 to-blue-600',
+             is_ai_enabled: true,
+               configuration: {
+                 inputTypes: ['freeform_text', 'keywords', 'briefs', 'notes'],
+                 aiIntegration: { enabled: true, validation: true, enhancement: true },
+                 features: ['Smart Validation', 'Auto-Enhancement', 'Keyword Extraction'],
+                 tabs: ['Basic', 'Instructions', 'AI Integration', 'Variables', 'Advanced', 'Test Input'],
+                 instructions: 'You are an expert input collection specialist. Your job is to gather, validate, and enhance user inputs for content creation. Transform raw user inputs into structured, actionable data that can be used by AI systems to create exceptional content. Focus on: 1) Input validation and cleaning, 2) Context extraction and enhancement, 3) Smart suggestions based on input patterns, 4) Keyword and entity extraction, 5) Format standardization for downstream processing.',
+                 systemPrompt: 'Act as a professional content input specialist who transforms raw user inputs into structured, enhanced data ready for AI processing.',
+                 variables: ['input_text', 'input_type', 'validation_level', 'enhancement_mode', 'output_format'],
+                 inputFields: [
+                   { id: 1, name: 'content_topic', type: 'text', required: true, variable: 'content_topic', placeholder: 'Enter main topic or subject' },
+                   { id: 2, name: 'content_type', type: 'select', required: true, variable: 'content_type', options: ['blog_post', 'email', 'social_media', 'ad_copy', 'sales_page', 'landing_page', 'product_description'], placeholder: 'Select content type' },
+                   { id: 3, name: 'target_audience', type: 'select', required: true, variable: 'target_audience', options: ['b2b_professionals', 'small_business_owners', 'consumers', 'millennials', 'gen_z', 'executives', 'entrepreneurs'], placeholder: 'Select target audience' },
+                   { id: 4, name: 'tone', type: 'select', required: true, variable: 'tone', options: ['professional', 'conversational', 'authoritative', 'friendly', 'urgent', 'persuasive', 'educational'], placeholder: 'Select tone' },
+                   { id: 5, name: 'keywords', type: 'textarea', required: false, variable: 'keywords', placeholder: 'Enter keywords separated by commas' },
+                   { id: 6, name: 'additional_notes', type: 'textarea', required: false, variable: 'additional_notes', placeholder: 'Any additional requirements or notes' }
+                 ]
+               }
+           },
+           {
+             node_id: 'voiceInput',
+             name: 'Voice Input',
+             description: 'Voice note transcription and processing',
+             type: 'voiceInput',
+             category: 'input',
+             sub_category: 'voice',
+             role: 'input',
+             icon: '🎤',
+             gradient: 'from-purple-400 to-purple-600',
+             is_ai_enabled: true,
+               configuration: {
+                 audioFormats: ['mp3', 'wav', 'm4a', 'ogg'],
+                 aiIntegration: { enabled: true, transcription: 'whisper', enhancement: true },
+                 features: ['Real-time Transcription', 'Voice Enhancement', 'Speaker Recognition'],
+                 tabs: ['Basic', 'Instructions', 'AI Integration', 'Variables', 'Advanced', 'Test Input'],
+                 instructions: 'You are an expert voice processing and transcription specialist. Your mission is to convert audio content into perfect, structured text while preserving meaning, tone, and context. Go beyond basic transcription - enhance clarity, fix grammar, identify speakers, extract key insights, and format the output for maximum usability. Focus on: 1) Accurate transcription with proper punctuation, 2) Speaker identification and labeling, 3) Content summarization and key point extraction, 4) Tone and emotion analysis, 5) Action item and decision extraction from meetings.',
+                 systemPrompt: 'Act as a professional transcriptionist and voice analyst who transforms audio content into actionable, well-structured text with insights.',
+                 variables: ['audio_file', 'transcription_quality', 'speaker_detection', 'content_type', 'output_style', 'language_code']
+               }
+           },
+           {
+             node_id: 'fileUpload',
+             name: 'File Upload',
+             description: 'PDF, DOCX, PPT, CSV content extraction',
+             type: 'fileUpload',
+             category: 'input',
+             sub_category: 'file',
+             role: 'input',
+             icon: '📎',
+             gradient: 'from-green-400 to-green-600',
+             is_ai_enabled: true,
+             configuration: {
+               supportedFormats: ['pdf', 'docx', 'pptx', 'csv', 'xlsx', 'txt'],
+               aiIntegration: { enabled: true, extraction: true, summarization: true },
+               features: ['Smart Extraction', 'Content Summarization', 'Format Detection'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'urlScrape',
+             name: 'URL/Scrape Input',
+             description: 'Extract content from websites',
+             type: 'urlScrapeInput',
+             category: 'input',
+             sub_category: 'web',
+             role: 'input',
+             icon: '🌐',
+             gradient: 'from-cyan-400 to-cyan-600',
+             is_ai_enabled: true,
+             configuration: {
+               scrapeTypes: ['article', 'product', 'review', 'social_post', 'video'],
+               aiIntegration: { enabled: true, extraction: true, summarization: true },
+               features: ['Smart Scraping', 'Content Cleaning', 'Structure Detection'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'templateSelector',
+             name: 'Template Selector',
+             description: 'Choose pre-built templates (blog, ad, etc.)',
+             type: 'templateSelector',
+             category: 'input',
+             sub_category: 'template',
+             role: 'input',
+             icon: '📋',
+             gradient: 'from-indigo-400 to-indigo-600',
+             is_ai_enabled: true,
+             configuration: {
+               templateTypes: ['blog', 'email', 'ad', 'social', 'sales', 'landing'],
+               aiIntegration: { enabled: true, recommendation: true, customization: true },
+               features: ['Smart Recommendations', 'Template Customization', 'Preview Mode'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'aiSuggestionEngine',
+             name: 'AI Suggestion Engine',
+             description: 'Auto-suggest inputs based on goals',
+             type: 'aiSuggestionEngine',
+             category: 'input',
+             sub_category: 'ai_suggestion',
+             role: 'input',
+             icon: '🧠',
+             gradient: 'from-pink-400 to-pink-600',
+             is_ai_enabled: true,
+             configuration: {
+               suggestionTypes: ['tone', 'format', 'platform', 'audience', 'keywords'],
+               aiIntegration: { enabled: true, prediction: true, learning: true },
+               features: ['Goal Analysis', 'Smart Suggestions', 'Adaptive Learning'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+
+           // ===== PROCESS SUB-NODES =====
+           {
+             node_id: 'writerEngine',
+             name: 'Writer Engine',
+             description: 'Professional content writing with multiple formats',
+             type: 'writerEngine',
+             category: 'process',
+             sub_category: 'writing',
+             role: 'process',
+             icon: '✍️',
+             gradient: 'from-emerald-400 to-emerald-600',
+             is_ai_enabled: true,
+               configuration: {
+                 writingTypes: ['blog', 'email_sequence', 'product_description', 'sales_page', 'press_release'],
+                 frameworks: ['AIDA', 'PAS', 'FAB', 'Problem-Agitate-Solve', 'Before-After-Bridge'],
+                 aiIntegration: { enabled: true, models: ['gpt-4o', 'claude-3'], optimization: 'quality' },
+                 features: ['Framework Selection', 'Tone Adaptation', 'Length Control', 'SEO Optimization'],
+                 tabs: ['Basic', 'Instructions', 'AI Integration', 'Variables', 'Advanced', 'Test Input'],
+                 instructions: 'You are a world-class content writer and copywriting expert. Your mission is to create content that not only informs but captivates, persuades, and drives action. Write with the skill of the best copywriters in history - combining storytelling, psychology, and strategic messaging. Focus on: 1) Hook creation that stops the scroll and grabs attention, 2) Value delivery that solves real problems, 3) Emotional engagement through storytelling and relatability, 4) Persuasive frameworks that guide readers to action, 5) SEO optimization without sacrificing readability, 6) Brand voice consistency and authenticity, 7) Conversion optimization and clear CTAs. Make every word count, every sentence flow, and every paragraph build toward the desired outcome.',
+                 systemPrompt: 'Act as a master copywriter and content strategist who creates content that converts, engages, and drives measurable results.',
+                 variables: ['content_type', 'target_audience', 'writing_tone', 'content_length', 'framework', 'keywords', 'cta_goal', 'brand_voice'],
+                 inputFields: [
+                   { id: 1, name: 'writing_framework', type: 'select', required: true, variable: 'writing_framework', options: ['AIDA', 'PAS', 'FAB', 'Problem-Agitate-Solve', 'Before-After-Bridge', 'PASTOR', 'The 4 Ps'], placeholder: 'Select writing framework' },
+                   { id: 2, name: 'content_length', type: 'select', required: true, variable: 'content_length', options: ['short_form_300', 'medium_form_800', 'long_form_1500', 'comprehensive_3000', 'epic_5000_plus'], placeholder: 'Select content length' },
+                   { id: 3, name: 'writing_style', type: 'select', required: true, variable: 'writing_style', options: ['conversational', 'professional', 'storytelling', 'data_driven', 'persuasive', 'educational', 'entertaining'], placeholder: 'Select writing style' },
+                   { id: 4, name: 'cta_goal', type: 'select', required: true, variable: 'cta_goal', options: ['generate_leads', 'drive_sales', 'increase_engagement', 'build_authority', 'educate_audience', 'promote_product', 'grow_following'], placeholder: 'Select CTA goal' },
+                   { id: 5, name: 'seo_keywords', type: 'textarea', required: false, variable: 'seo_keywords', placeholder: 'Enter SEO keywords (comma separated)' },
+                   { id: 6, name: 'brand_voice', type: 'textarea', required: false, variable: 'brand_voice', placeholder: 'Describe brand voice and personality' },
+                   { id: 7, name: 'special_requirements', type: 'textarea', required: false, variable: 'special_requirements', placeholder: 'Any special requirements or constraints' }
+                 ]
+               }
+           },
+           {
+             node_id: 'imageGenerator',
+             name: 'Image Generator',
+             description: 'AI-powered visual content creation',
+             type: 'imageGenerator',
+             category: 'process',
+             sub_category: 'visual',
+             role: 'process',
+             icon: '🖼️',
+             gradient: 'from-purple-400 to-purple-600',
+             is_ai_enabled: true,
+             configuration: {
+               imageTypes: ['banner', 'social_graphic', 'infographic', 'logo', 'illustration'],
+               styles: ['realistic', 'cartoon', 'corporate', 'minimalist', 'artistic'],
+               aiIntegration: { enabled: true, models: ['dall-e-3', 'midjourney', 'stable-diffusion'], optimization: 'visual_appeal' },
+               features: ['Style Selection', 'Auto-sizing', 'Brand Alignment', 'Multi-format Export'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'audioGenerator',
+             name: 'Audio Generator (TTS)',
+             description: 'Text-to-speech with voice customization',
+             type: 'audioGenerator',
+             category: 'process',
+             sub_category: 'audio',
+             role: 'process',
+             icon: '🔊',
+             gradient: 'from-orange-400 to-orange-600',
+             is_ai_enabled: true,
+             configuration: {
+               voiceTypes: ['male_professional', 'female_friendly', 'authoritative', 'casual', 'podcast_style'],
+               audioFormats: ['mp3', 'wav', 'm4a', 'audiogram_video'],
+               aiIntegration: { enabled: true, models: ['elevenlabs', 'azure-tts'], optimization: 'clarity' },
+               features: ['Voice Cloning', 'Emotion Control', 'Speed Adjustment', 'Audiogram Creation'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'transcriptionEngine',
+             name: 'Transcription Engine',
+             description: 'Speech-to-text with content transformation',
+             type: 'transcriptionEngine',
+             category: 'process',
+             sub_category: 'transcription',
+             role: 'process',
+             icon: '📄',
+             gradient: 'from-blue-400 to-blue-600',
+             is_ai_enabled: true,
+             configuration: {
+               inputTypes: ['audio_file', 'video_file', 'live_recording', 'meeting'],
+               outputFormats: ['clean_text', 'timestamped', 'srt_subtitles', 'summary'],
+               aiIntegration: { enabled: true, models: ['whisper', 'rev-ai'], optimization: 'accuracy' },
+               features: ['Speaker Identification', 'Auto-punctuation', 'Content Summarization', 'Subtitle Generation'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'researchEngine',
+             name: 'Research Engine',
+             description: 'Comprehensive content research and analysis',
+             type: 'researchEngine',
+             category: 'process',
+             sub_category: 'research',
+             role: 'process',
+             icon: '🔎',
+             gradient: 'from-cyan-400 to-cyan-600',
+             is_ai_enabled: true,
+               configuration: {
+                 researchTypes: ['competitor_analysis', 'trend_hunting', 'keyword_research', 'audience_persona', 'fact_checking'],
+                 dataSources: ['google_trends', 'reddit', 'twitter', 'serp_api', 'competitor_sites'],
+                 aiIntegration: { enabled: true, models: ['gpt-4o', 'perplexity'], optimization: 'insight_quality' },
+                 features: ['Trend Detection', 'Competitor Monitoring', 'Citation Generation', 'Data Visualization'],
+                 tabs: ['Basic', 'Instructions', 'AI Integration', 'Variables', 'Advanced', 'Test Input'],
+                 instructions: 'You are an elite research analyst and market intelligence expert. Your mission is to uncover insights that give businesses a competitive edge. Go beyond surface-level research - dive deep into trends, analyze competitor strategies, understand audience psychology, and identify opportunities others miss. Focus on: 1) Comprehensive competitor analysis with strategic insights, 2) Trend identification and future predictions, 3) Deep audience research and persona development, 4) Keyword research with search intent analysis, 5) Fact-checking with authoritative source verification, 6) Market opportunity identification, 7) Data synthesis into actionable recommendations. Provide research that is thorough, accurate, and strategically valuable.',
+                 systemPrompt: 'Act as a senior research analyst who delivers deep insights and competitive intelligence that drives strategic business decisions.',
+                 variables: ['research_topic', 'research_depth', 'data_sources', 'competitor_list', 'target_market', 'time_frame', 'output_format']
+               }
+           },
+           {
+             node_id: 'contentOptimizer',
+             name: 'Content Optimization Hub',
+             description: 'SEO, readability, and performance optimization',
+             type: 'contentOptimizer',
+             category: 'process',
+             sub_category: 'optimization',
+             role: 'process',
+             icon: '🚀',
+             gradient: 'from-red-400 to-red-600',
+             is_ai_enabled: true,
+             configuration: {
+               optimizationTypes: ['seo', 'readability', 'ai_visibility', 'plagiarism_check', 'tone_adjustment'],
+               languages: ['english', 'spanish', 'french', 'german', 'portuguese', 'italian'],
+               aiIntegration: { enabled: true, models: ['gpt-4o', 'claude-3'], optimization: 'performance' },
+               features: ['SEO Scoring', 'Readability Analysis', 'Multi-language Support', 'Plagiarism Detection'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+
+           // ===== CONDITION SUB-NODES =====
+           {
+             node_id: 'approvalGate',
+             name: 'Approval Gate',
+             description: 'Require human review before output',
+             type: 'approvalGate',
+             category: 'condition',
+             sub_category: 'approval',
+             role: 'condition',
+             icon: '✋',
+             gradient: 'from-yellow-400 to-yellow-600',
+             is_ai_enabled: true,
+               configuration: {
+                 approvalTypes: ['manual_review', 'stakeholder_approval', 'compliance_check', 'quality_gate'],
+                 notificationMethods: ['email', 'slack', 'teams', 'webhook'],
+                 aiIntegration: { enabled: true, pre_screening: true, risk_assessment: true },
+                 features: ['Automated Screening', 'Multi-reviewer Support', 'Approval History', 'Risk Assessment'],
+                 tabs: ['Basic', 'Instructions', 'AI Integration', 'Variables', 'Advanced', 'Test Input'],
+                 instructions: 'You are a quality assurance and approval specialist ensuring content meets the highest standards before publication. Your role is to evaluate content against quality, compliance, and brand guidelines, then route for appropriate approvals. Focus on: 1) Quality assessment against defined criteria, 2) Compliance verification (legal, regulatory, brand), 3) Risk assessment and mitigation recommendations, 4) Stakeholder routing based on content type and sensitivity, 5) Feedback consolidation and improvement suggestions, 6) Approval tracking and audit trail maintenance. Ensure nothing subpar or risky gets through while maintaining efficient workflows.',
+                 systemPrompt: 'Act as a senior quality assurance manager who protects brand integrity and ensures content excellence through rigorous approval processes.',
+                 variables: ['content_type', 'approval_level', 'quality_criteria', 'compliance_requirements', 'stakeholder_list', 'urgency_level']
+               }
+           },
+           {
+             node_id: 'platformCondition',
+             name: 'Platform Condition',
+             description: 'Platform-specific content adaptation',
+             type: 'platformCondition',
+             category: 'condition',
+             sub_category: 'platform',
+             role: 'condition',
+             icon: '📱',
+             gradient: 'from-purple-400 to-purple-600',
+             is_ai_enabled: true,
+             configuration: {
+               platforms: ['facebook', 'instagram', 'twitter', 'linkedin', 'tiktok', 'youtube'],
+               adaptations: ['character_limits', 'hashtag_rules', 'image_sizes', 'video_specs'],
+               aiIntegration: { enabled: true, auto_adaptation: true, compliance_check: true },
+               features: ['Auto-formatting', 'Compliance Checking', 'Platform Optimization', 'Multi-variant Creation'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'audienceFilter',
+             name: 'Audience Filter',
+             description: 'Audience-specific content customization',
+             type: 'audienceFilter',
+             category: 'condition',
+             sub_category: 'audience',
+             role: 'condition',
+             icon: '👥',
+             gradient: 'from-green-400 to-green-600',
+             is_ai_enabled: true,
+             configuration: {
+               audienceTypes: ['b2b', 'b2c', 'gen_z', 'millennials', 'professionals', 'executives'],
+               customizations: ['tone_adjustment', 'language_style', 'complexity_level', 'cultural_adaptation'],
+               aiIntegration: { enabled: true, persona_matching: true, tone_adaptation: true },
+               features: ['Persona Matching', 'Tone Adaptation', 'Cultural Sensitivity', 'Engagement Prediction'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'performanceRule',
+             name: 'Performance Rule',
+             description: 'Performance-based content regeneration',
+             type: 'performanceRule',
+             category: 'condition',
+             sub_category: 'performance',
+             role: 'condition',
+             icon: '📊',
+             gradient: 'from-indigo-400 to-indigo-600',
+             is_ai_enabled: true,
+             configuration: {
+               metrics: ['ctr', 'engagement_rate', 'conversion_rate', 'reach', 'impressions'],
+               thresholds: ['low_performance', 'average_performance', 'high_performance'],
+               aiIntegration: { enabled: true, performance_prediction: true, auto_optimization: true },
+               features: ['Performance Tracking', 'Auto-regeneration', 'A/B Testing', 'Optimization Suggestions'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'complianceCheck',
+             name: 'Compliance Check',
+             description: 'GDPR, FTC disclosure, brand guidelines',
+             type: 'complianceCheck',
+             category: 'condition',
+             sub_category: 'compliance',
+             role: 'condition',
+             icon: '⚖️',
+             gradient: 'from-red-400 to-red-600',
+             is_ai_enabled: true,
+             configuration: {
+               complianceTypes: ['gdpr', 'ftc_disclosure', 'brand_guidelines', 'legal_requirements', 'industry_standards'],
+               checkMethods: ['automated_scan', 'keyword_detection', 'pattern_matching', 'ai_analysis'],
+               aiIntegration: { enabled: true, compliance_detection: true, auto_correction: true },
+               features: ['Automated Scanning', 'Violation Detection', 'Auto-correction', 'Compliance Reporting'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'abTestRouter',
+             name: 'A/B Test Router',
+             description: 'Send two versions to test groups',
+             type: 'abTestRouter',
+             category: 'condition',
+             sub_category: 'testing',
+             role: 'condition',
+             icon: '🧪',
+             gradient: 'from-cyan-400 to-cyan-600',
+             is_ai_enabled: true,
+             configuration: {
+               testTypes: ['headline_test', 'cta_test', 'image_test', 'tone_test', 'format_test'],
+               splitMethods: ['50_50', '70_30', 'custom_ratio', 'statistical_significance'],
+               aiIntegration: { enabled: true, variant_generation: true, result_analysis: true },
+               features: ['Variant Generation', 'Statistical Analysis', 'Winner Selection', 'Performance Insights'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+
+           // ===== PREVIEW SUB-NODES =====
+           {
+             node_id: 'livePreviewRenderer',
+             name: 'Live Preview Renderer',
+             description: 'See content as it will appear across platforms',
+             type: 'livePreviewRenderer',
+             category: 'preview',
+             sub_category: 'visual',
+             role: 'preview',
+             icon: '👁️',
+             gradient: 'from-blue-400 to-blue-600',
+             is_ai_enabled: true,
+             configuration: {
+               previewTypes: ['blog_post', 'email', 'social_post', 'ad', 'landing_page'],
+               deviceTypes: ['mobile', 'tablet', 'desktop', 'smart_tv'],
+               aiIntegration: { enabled: true, layout_optimization: true, visual_enhancement: true },
+               features: ['Real-time Rendering', 'Device Simulation', 'Layout Optimization', 'Visual Enhancement'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'mobileDeskSimulator',
+             name: 'Mobile/Desktop Simulator',
+             description: 'View responsive design across devices',
+             type: 'mobileDeskSimulator',
+             category: 'preview',
+             sub_category: 'responsive',
+             role: 'preview',
+             icon: '📱',
+             gradient: 'from-green-400 to-green-600',
+             is_ai_enabled: true,
+             configuration: {
+               devices: ['iphone', 'android', 'ipad', 'laptop', 'desktop', 'smart_watch'],
+               orientations: ['portrait', 'landscape', 'auto_rotate'],
+               aiIntegration: { enabled: true, responsive_optimization: true, layout_adaptation: true },
+               features: ['Device Emulation', 'Responsive Testing', 'Layout Adaptation', 'Performance Simulation'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'voiceSamplePlayer',
+             name: 'Voice Sample Player',
+             description: 'Listen to TTS output with voice options',
+             type: 'voiceSamplePlayer',
+             category: 'preview',
+             sub_category: 'audio',
+             role: 'preview',
+             icon: '🔊',
+             gradient: 'from-purple-400 to-purple-600',
+             is_ai_enabled: true,
+             configuration: {
+               voiceOptions: ['male_professional', 'female_friendly', 'authoritative', 'casual', 'multilingual'],
+               playbackFeatures: ['speed_control', 'pitch_adjustment', 'pause_resume', 'chapter_navigation'],
+               aiIntegration: { enabled: true, voice_optimization: true, emotion_analysis: true },
+               features: ['Voice Comparison', 'Emotion Analysis', 'Speed Control', 'Quality Assessment'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'visualMockupViewer',
+             name: 'Visual Mockup Viewer',
+             description: 'See images/banners in context',
+             type: 'visualMockupViewer',
+             category: 'preview',
+             sub_category: 'mockup',
+             role: 'preview',
+             icon: '🖼️',
+             gradient: 'from-orange-400 to-orange-600',
+             is_ai_enabled: true,
+             configuration: {
+               mockupTypes: ['website_banner', 'social_post', 'email_header', 'print_ad', 'billboard'],
+               contextViews: ['in_feed', 'full_screen', 'thumbnail', 'hero_section'],
+               aiIntegration: { enabled: true, context_optimization: true, visual_impact_analysis: true },
+               features: ['Context Simulation', 'Visual Impact Analysis', 'Brand Consistency Check', 'Performance Prediction'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'engagementPredictor',
+             name: 'Engagement Predictor',
+             description: 'AI estimates click-through or engagement rate',
+             type: 'engagementPredictor',
+             category: 'preview',
+             sub_category: 'analytics',
+             role: 'preview',
+             icon: '📈',
+             gradient: 'from-red-400 to-red-600',
+             is_ai_enabled: true,
+             configuration: {
+               predictionTypes: ['ctr', 'engagement_rate', 'conversion_rate', 'viral_potential', 'retention_rate'],
+               factors: ['content_quality', 'timing', 'audience_match', 'platform_algorithm', 'trending_topics'],
+               aiIntegration: { enabled: true, prediction_models: true, optimization_suggestions: true },
+               features: ['Performance Prediction', 'Optimization Suggestions', 'Risk Assessment', 'Trend Analysis'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'editFeedbackLoop',
+             name: 'Edit & Feedback Loop',
+             description: 'Let users tweak content directly',
+             type: 'editFeedbackLoop',
+             category: 'preview',
+             sub_category: 'editing',
+             role: 'preview',
+             icon: '✏️',
+             gradient: 'from-cyan-400 to-cyan-600',
+             is_ai_enabled: true,
+             configuration: {
+               editingTools: ['inline_editor', 'comment_system', 'version_control', 'collaborative_editing'],
+               feedbackTypes: ['text_suggestions', 'tone_adjustment', 'length_modification', 'style_changes'],
+               aiIntegration: { enabled: true, smart_suggestions: true, auto_improvement: true },
+               features: ['Real-time Editing', 'AI Suggestions', 'Version Control', 'Collaborative Features'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+
+           // ===== OUTPUT SUB-NODES =====
+           {
+             node_id: 'formatExporter',
+             name: 'Format Exporter',
+             description: 'Export content in multiple formats',
+             type: 'formatExporter',
+             category: 'output',
+             sub_category: 'format',
+             role: 'output',
+             icon: '📄',
+             gradient: 'from-blue-400 to-blue-600',
+             is_ai_enabled: true,
+               configuration: {
+                 formats: ['pdf', 'docx', 'txt', 'html', 'markdown', 'json', 'xml'],
+                 customizations: ['styling', 'formatting', 'metadata', 'compression'],
+                 aiIntegration: { enabled: true, format_optimization: true, quality_enhancement: true },
+                 features: ['Multi-format Export', 'Custom Styling', 'Metadata Insertion', 'Quality Optimization'],
+                 tabs: ['Basic', 'Instructions', 'AI Integration', 'Variables', 'Advanced', 'Test Input'],
+                 instructions: 'You are a document formatting and export specialist who transforms content into perfectly formatted deliverables across multiple formats. Your mission is to ensure content looks professional, maintains readability, and meets platform-specific requirements regardless of output format. Focus on: 1) Format-specific optimization for maximum compatibility, 2) Professional styling and layout that enhances readability, 3) Metadata and SEO optimization for digital formats, 4) Accessibility compliance across all outputs, 5) Compression and file size optimization without quality loss, 6) Brand consistency in styling and presentation, 7) Cross-platform compatibility testing and validation.',
+                 systemPrompt: 'Act as a professional document formatter who ensures content looks exceptional and functions perfectly across all output formats.',
+                 variables: ['output_format', 'styling_template', 'compression_level', 'metadata_tags', 'accessibility_level', 'brand_guidelines'],
+                 inputFields: [
+                   { id: 1, name: 'export_format', type: 'select', required: true, variable: 'export_format', options: ['pdf', 'docx', 'txt', 'html', 'markdown', 'json', 'xml', 'epub'], placeholder: 'Select export format' },
+                   { id: 2, name: 'styling_template', type: 'select', required: true, variable: 'styling_template', options: ['professional', 'modern', 'classic', 'minimal', 'branded', 'academic', 'creative'], placeholder: 'Select styling template' },
+                   { id: 3, name: 'include_metadata', type: 'checkbox', required: false, variable: 'include_metadata', options: ['yes'], placeholder: 'Include metadata' },
+                   { id: 4, name: 'compression_level', type: 'select', required: false, variable: 'compression_level', options: ['none', 'low', 'medium', 'high', 'maximum'], placeholder: 'Select compression level' },
+                   { id: 5, name: 'accessibility_compliance', type: 'select', required: false, variable: 'accessibility_compliance', options: ['basic', 'wcag_aa', 'wcag_aaa', 'section_508'], placeholder: 'Select accessibility level' },
+                   { id: 6, name: 'custom_branding', type: 'textarea', required: false, variable: 'custom_branding', placeholder: 'Custom branding guidelines or requirements' }
+                 ]
+               }
+           },
+           {
+             node_id: 'audioExporter',
+             name: 'Audio Exporter',
+             description: 'Export audio in various formats with audiograms',
+             type: 'audioExporter',
+             category: 'output',
+             sub_category: 'audio',
+             role: 'output',
+             icon: '🎵',
+             gradient: 'from-green-400 to-green-600',
+             is_ai_enabled: true,
+             configuration: {
+               audioFormats: ['mp3', 'wav', 'm4a', 'flac', 'ogg'],
+               visualFormats: ['audiogram_video', 'waveform_gif', 'spectrum_animation'],
+               aiIntegration: { enabled: true, audio_enhancement: true, visual_generation: true },
+               features: ['Multi-format Audio', 'Audiogram Creation', 'Visual Waveforms', 'Audio Enhancement'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'imageExporter',
+             name: 'Image Exporter',
+             description: 'Export images with auto-generated alt-text',
+             type: 'imageExporter',
+             category: 'output',
+             sub_category: 'image',
+             role: 'output',
+             icon: '🖼️',
+             gradient: 'from-purple-400 to-purple-600',
+             is_ai_enabled: true,
+             configuration: {
+               imageFormats: ['png', 'jpg', 'svg', 'webp', 'gif', 'tiff'],
+               optimizations: ['compression', 'sizing', 'quality', 'accessibility'],
+               aiIntegration: { enabled: true, alt_text_generation: true, seo_optimization: true },
+               features: ['Format Optimization', 'Alt-text Generation', 'SEO Enhancement', 'Accessibility Compliance'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'schedulerAggregator',
+             name: 'Scheduler & Aggregator',
+             description: 'Auto-post to social media and scheduling',
+             type: 'schedulerAggregator',
+             category: 'output',
+             sub_category: 'scheduling',
+             role: 'output',
+             icon: '📅',
+             gradient: 'from-orange-400 to-orange-600',
+             is_ai_enabled: true,
+             configuration: {
+               platforms: ['facebook', 'instagram', 'linkedin', 'twitter', 'tiktok', 'youtube'],
+               schedulingOptions: ['immediate', 'optimal_time', 'custom_schedule', 'drip_campaign'],
+               aiIntegration: { enabled: true, optimal_timing: true, audience_analysis: true },
+               features: ['Multi-platform Posting', 'Optimal Timing', 'Campaign Management', 'Analytics Integration'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'cmsPublisher',
+             name: 'CMS Publisher',
+             description: 'Direct publish to WordPress, Shopify, Medium',
+             type: 'cmsPublisher',
+             category: 'output',
+             sub_category: 'cms',
+             role: 'output',
+             icon: '🌐',
+             gradient: 'from-red-400 to-red-600',
+             is_ai_enabled: true,
+             configuration: {
+               platforms: ['wordpress', 'shopify', 'medium', 'substack', 'ghost', 'drupal'],
+               publishOptions: ['draft', 'scheduled', 'immediate', 'review_pending'],
+               aiIntegration: { enabled: true, seo_optimization: true, format_adaptation: true },
+               features: ['Multi-CMS Support', 'SEO Optimization', 'Format Adaptation', 'Automated Publishing'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           },
+           {
+             node_id: 'apiPusher',
+             name: 'API Pusher',
+             description: 'Send generated content to custom apps or dashboards',
+             type: 'apiPusher',
+             category: 'output',
+             sub_category: 'api',
+             role: 'output',
+             icon: '🔗',
+             gradient: 'from-cyan-400 to-cyan-600',
+             is_ai_enabled: true,
+             configuration: {
+               apiTypes: ['rest', 'graphql', 'webhook', 'websocket'],
+               authMethods: ['api_key', 'oauth', 'bearer_token', 'basic_auth'],
+               aiIntegration: { enabled: true, data_formatting: true, error_handling: true },
+               features: ['Custom API Integration', 'Data Formatting', 'Error Handling', 'Real-time Delivery'],
+               tabs: ['Input', 'Instructions', 'Format', 'AI Integration', 'Test Input', 'Advanced']
+             }
+           }
+         ]
+      
+      setNodeTypes(hardcodedNodes)
+      setCategories(['input', 'process', 'condition', 'structural', 'output', 'preview', 'content', 'marketing', 'sales', 'pr'])
+      
+      // Initialize expanded categories
+      const initialExpanded = {
+        'input': true,
+        'process': true,
+        'condition': true,
+        'structural': true,
+        'output': true,
+        'preview': true,
+        'content': true,
+        'marketing': true,
+        'sales': true,
+        'pr': true
+      }
+      setExpandedCategories(initialExpanded)
+      
+      console.log(`✅ Loaded ${hardcodedNodes.length} Alchemist Nodes locally (5 Master + ${hardcodedNodes.length - 5} Sub-nodes)`)
+    } catch (error) {
+      console.error('Error loading node types:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const syncWithDatabase = async () => {
+    setSyncing(true)
+    try {
+      // Force reload from database
+      await loadNodeTypes()
+      console.log('✅ Alchemist Node Palette synced with database')
+    } catch (error) {
+      console.error('❌ Error syncing with database:', error)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // Get icon component by name
+  const getIconComponent = (iconName) => {
+    const icons = {
+      FileText, Download, CheckCircle, PenTool, Search, Image, Calendar,
+      Settings, TrendingUp, Mail, Users, Target, Lightbulb, Megaphone,
+      Video, BookOpen, Zap, Filter
+    }
+    return icons[iconName] || FileText
+  }
+
+  // Filter nodes based on search and category
+  const filteredNodes = nodeTypes.filter(node => {
+    const matchesCategory = selectedCategory === 'all' || node.category === selectedCategory
+    const matchesSearch = node.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         node.description.toLowerCase().includes(searchTerm.toLowerCase())
+    return matchesCategory && matchesSearch
+  })
+
+  // Group nodes by category
+  const groupedNodes = filteredNodes.reduce((acc, node) => {
+    if (!acc[node.category]) {
+      acc[node.category] = []
+    }
+    acc[node.category].push(node)
+    return acc
+  }, {})
+
+  // Toggle category expansion
+  const toggleCategory = (category) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }))
+  }
+
+  // Get category display name
+  const getCategoryDisplayName = (category) => {
+    const names = {
+      master: 'Master Nodes',
+      input: 'Input Sub-nodes',
+      process: 'Process Sub-nodes', 
+      condition: 'Condition Sub-nodes',
+      structural: 'Structural Sub-nodes',
+      output: 'Output Sub-nodes'
+    }
+    return names[category] || category
+  }
+
+  // Get category icon
+  const getCategoryIcon = (category) => {
+    const icons = {
+      master: Settings,
+      input: FileText,
+      process: PenTool,
+      condition: CheckCircle,
+      structural: Image,
+      output: Download
+    }
+    return icons[category] || FileText
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          className="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden border border-gray-700"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-700">
+            <div>
+              <h2 className="text-2xl font-bold text-white">Alchemist Node Palette</h2>
+              <p className="text-gray-400 text-sm">Choose content-specific nodes for your workflow</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={syncWithDatabase}
+                disabled={syncing}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg transition-colors"
+              >
+                <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? 'Syncing...' : 'Sync Database'}
+              </button>
+              <button
+                onClick={onClose}
+                className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+
+          {/* Search and Filter */}
+          <div className="p-6 border-b border-gray-700">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    placeholder="Search nodes..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+              <div className="flex space-x-2">
+                {['all', ...categories].map(category => (
+                  <button
+                    key={category}
+                    onClick={() => setSelectedCategory(category)}
+                    className={`px-4 py-3 rounded-lg font-medium transition-colors ${
+                      selectedCategory === category
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    {category === 'all' ? 'All Categories' : getCategoryDisplayName(category)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Node Categories */}
+          <div className="p-6 overflow-y-auto max-h-[60vh]">
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+                <span className="ml-3 text-gray-400">Loading nodes...</span>
+              </div>
+            ) : (
+              Object.entries(groupedNodes).map(([category, categoryNodes]) => {
+                const isExpanded = expandedCategories[category]
+                const CategoryIcon = getCategoryIcon(category)
+
+                return (
+                  <div key={category} className="mb-6">
+                    <button
+                      onClick={() => toggleCategory(category)}
+                      className="flex items-center justify-between w-full p-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors mb-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <CategoryIcon className="w-5 h-5 text-purple-400" />
+                        <span className="text-white font-semibold">{getCategoryDisplayName(category)}</span>
+                        <span className="text-gray-400 text-sm">({categoryNodes.length})</span>
+                      </div>
+                      {isExpanded ? (
+                        <ChevronUp className="w-5 h-5 text-gray-400" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-gray-400" />
+                      )}
+                    </button>
+
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                        >
+                          {categoryNodes.map((node) => {
+                            const IconComponent = getIconComponent(node.icon)
+                            return (
+                              <motion.div
+                                key={node.node_id}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => onNodeSelect(node.node_id)}
+                                className="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-purple-400 hover:shadow-lg hover:shadow-purple-500/20 transition-all duration-200 cursor-pointer group"
+                              >
+                                <div className="flex items-center gap-3 mb-3">
+                                  <div className={`w-10 h-10 bg-gradient-to-r ${node.gradient} rounded-lg flex items-center justify-center group-hover:opacity-80 transition-opacity`}>
+                                    <span className="text-2xl">{node.icon}</span>
+                                  </div>
+                                  <div>
+                                    <h4 className="text-white font-semibold">{node.name}</h4>
+                                    <div className="text-xs text-gray-500">{node.category}</div>
+                                  </div>
+                                </div>
+                                
+                                <p className="text-gray-400 text-sm mb-3 line-clamp-2">{node.description}</p>
+                                
+                                <div className="space-y-2">
+                                  <div className="text-xs text-gray-500">Features:</div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {(node.configuration?.features || []).slice(0, 3).map((feature, idx) => (
+                                      <span key={idx} className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">
+                                        {feature}
+                                      </span>
+                                    ))}
+                                    {(node.configuration?.features || []).length > 3 && (
+                                      <span className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">
+                                        +{(node.configuration?.features || []).length - 3} more
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="mt-3 text-xs text-gray-500">
+                                  Inputs: {(node.configuration?.inputs || []).length} available
+                                </div>
+                              </motion.div>
+                            )
+                          })}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
+export default AlchemistNodePalette

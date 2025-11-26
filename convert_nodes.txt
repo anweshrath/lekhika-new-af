@@ -1,0 +1,22 @@
+export const QualityOptimizerNode = createBeautifulNode('process', 'QUALITY OPTIMIZER', 'Content Enhancement', Zap, ['Grammar correction', 'Readability improvement', 'Engagement optimization'], 'GPT-4')
+
+export const LogicGateNode = createBeautifulNode('condition', 'LOGIC GATE', 'Conditional Logic', GitBranch, ['Multiple conditions', 'Complex logic chains', 'Dynamic branching'], 'GPT-4o')
+
+export const DecisionTreeNode = createBeautifulNode('condition', 'DECISION TREE', 'Multi-path Logic', GitBranch, ['Tree-based decisions', 'Multiple outcomes', 'Hierarchical logic'], 'Claude-3')
+
+export const ValidationCheckNode = createBeautifulNode('condition', 'VALIDATION CHECK', 'Data Validation', Settings, ['Input validation', 'Quality checks', 'Error handling'], 'Gemini-Pro')
+
+export const BlueprintDesignerNode = createBeautifulNode('structural', 'BLUEPRINT DESIGNER', 'Structure Design', Building2, ['Visual blueprints', 'Layout planning', 'Structure templates'], 'GPT-4o')
+
+export const TemplateManagerNode = createBeautifulNode('structural', 'TEMPLATE MANAGER', 'Template System', FileText, ['Template library', 'Dynamic templates', 'Custom layouts'], 'Claude-3')
+
+export const LayoutEngineNode = createBeautifulNode('structural', 'LAYOUT ENGINE', 'Content Layout', Building2, ['Responsive design', 'Auto-layout', 'Style consistency'], 'GPT-4')
+
+export const MultiFormatExporterNode = createBeautifulNode('output', 'MULTI-FORMAT EXPORTER', 'Format Export', Download, ['PDF, DOCX, HTML', 'Custom formats', 'Batch export'], 'GPT-4o')
+
+export const PreviewGeneratorNode = createBeautifulNode('output', 'PREVIEW GENERATOR', 'Content Preview', Eye, ['Live preview', 'Multiple views', 'Interactive preview'], 'Claude-3')
+
+export const DeliveryManagerNode = createBeautifulNode('output', 'DELIVERY MANAGER', 'Content Delivery', Download, ['Automated delivery', 'Scheduling', 'Multi-channel'], 'Gemini-Pro')
+
+
+

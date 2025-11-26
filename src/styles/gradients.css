@@ -1,0 +1,440 @@
+/* ========================================
+   LEKHIKA 2.0 - GRADIENT EXPLOSION
+   Maximum visual impact with gradients
+   ======================================== */
+
+/* ============ GRADIENT BACKGROUNDS ============ */
+
+.gradient-bg-primary {
+  background: var(--theme-gradient-primary);
+}
+
+.gradient-bg-surface {
+  background: var(--theme-gradient-surface);
+}
+
+.gradient-bg-glow {
+  background: var(--theme-gradient-glow);
+}
+
+.gradient-bg-mesh {
+  background: 
+    radial-gradient(at 0% 0%, var(--theme-primary) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, var(--theme-secondary) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, var(--theme-accent) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, var(--theme-success) 0px, transparent 50%);
+  background-color: var(--color-background);
+}
+
+.gradient-bg-animated {
+  background: linear-gradient(
+    -45deg,
+    var(--theme-primary),
+    var(--theme-secondary),
+    var(--theme-accent),
+    var(--theme-primary)
+  );
+  background-size: 400% 400%;
+  animation: gradient-shift 15s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* ============ GRADIENT BORDERS ============ */
+
+.gradient-border {
+  position: relative;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: var(--theme-gradient-primary);
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.gradient-border-animated::before {
+  background: conic-gradient(
+    from 0deg,
+    var(--theme-primary),
+    var(--theme-secondary),
+    var(--theme-accent),
+    var(--theme-primary)
+  );
+  animation: border-rotate 4s linear infinite;
+}
+
+@keyframes border-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============ GRADIENT TEXT ============ */
+
+.text-gradient {
+  background: var(--theme-gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  display: inline-block;
+}
+
+.text-gradient-animated {
+  background: linear-gradient(
+    90deg,
+    var(--theme-primary),
+    var(--theme-secondary),
+    var(--theme-accent),
+    var(--theme-secondary),
+    var(--theme-primary)
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-flow 3s ease infinite;
+}
+
+@keyframes gradient-flow {
+  0%, 100% {
+    background-position: 0% center;
+  }
+  50% {
+    background-position: 100% center;
+  }
+}
+
+.text-gradient-rainbow {
+  background: linear-gradient(
+    90deg,
+    #FF0080,
+    #FF8C00,
+    #FFD700,
+    #00FF00,
+    #00BFFF,
+    #8A2BE2,
+    #FF0080
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-flow 5s linear infinite;
+}
+
+/* ============ GRADIENT OVERLAYS ============ */
+
+.gradient-overlay {
+  position: relative;
+}
+
+.gradient-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--theme-gradient-primary);
+  opacity: 0.1;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.gradient-overlay-strong::after {
+  opacity: 0.3;
+}
+
+/* Gradient mesh overlay for hero sections */
+.gradient-mesh-overlay {
+  position: relative;
+  overflow: hidden;
+}
+
+.gradient-mesh-overlay::before {
+  content: '';
+  position: absolute;
+  width: 150%;
+  height: 150%;
+  top: -25%;
+  left: -25%;
+  background: 
+    radial-gradient(circle at 20% 20%, var(--theme-primary) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, var(--theme-secondary) 0%, transparent 50%),
+    radial-gradient(circle at 50% 80%, var(--theme-accent) 0%, transparent 50%);
+  opacity: 0.15;
+  pointer-events: none;
+  animation: mesh-float 20s ease-in-out infinite;
+}
+
+@keyframes mesh-float {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(5%, -5%) scale(1.1);
+  }
+  66% {
+    transform: translate(-5%, 5%) scale(0.9);
+  }
+}
+
+/* ============ GRADIENT BUTTONS ============ */
+
+.btn-gradient-primary {
+  background: var(--theme-gradient-primary);
+  color: white;
+  border: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-gradient-primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.btn-gradient-primary:hover::before {
+  left: 100%;
+}
+
+.btn-gradient-animated {
+  background: linear-gradient(
+    -45deg,
+    var(--theme-primary),
+    var(--theme-secondary),
+    var(--theme-accent),
+    var(--theme-primary)
+  );
+  background-size: 400% 400%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+/* ============ GRADIENT CARDS ============ */
+
+.card-gradient-border {
+  background: var(--color-surface);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  position: relative;
+}
+
+.card-gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: var(--theme-gradient-primary);
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.card-gradient-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-gradient-hover:hover::before {
+  opacity: 1;
+  animation: gradient-shift 3s ease infinite;
+}
+
+/* ============ GRADIENT DIVIDERS ============ */
+
+.gradient-divider {
+  height: 2px;
+  background: var(--theme-gradient-primary);
+  border: none;
+  margin: 2rem 0;
+}
+
+.gradient-divider-vertical {
+  width: 2px;
+  height: 100%;
+  background: var(--theme-gradient-primary);
+  border: none;
+}
+
+/* ============ GRADIENT SHADOWS ============ */
+
+.shadow-gradient-primary {
+  box-shadow: 
+    0 10px 40px -10px var(--theme-primary),
+    0 0 0 1px var(--theme-primary);
+}
+
+.shadow-gradient-glow {
+  box-shadow: 
+    0 0 20px var(--theme-primary),
+    0 0 40px var(--theme-secondary),
+    0 10px 60px -10px var(--theme-accent);
+}
+
+.shadow-gradient-soft {
+  box-shadow: 
+    0 10px 30px -5px var(--theme-primary),
+    0 0 10px -5px var(--theme-secondary);
+}
+
+/* ============ GRADIENT PROGRESS ============ */
+
+.progress-gradient {
+  background: var(--theme-gradient-primary);
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-gradient::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+/* ============ GRADIENT BADGES ============ */
+
+.badge-gradient {
+  background: var(--theme-gradient-primary);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.2);
+}
+
+.badge-gradient-pulsing {
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.2);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 8px 28px 0 var(--theme-primary);
+  }
+}
+
+/* ============ GRADIENT ICONS ============ */
+
+.icon-gradient {
+  background: var(--theme-gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============ GLASSMORPHISM WITH GRADIENTS ============ */
+
+.glass-gradient {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.05)
+  );
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-gradient-dark {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 0, 0, 0.3),
+    rgba(0, 0, 0, 0.1)
+  );
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+}
+
+/* ============ GRADIENT HOVER STATES ============ */
+
+.hover-gradient-shift {
+  background: var(--theme-gradient-primary);
+  background-size: 200% 200%;
+  transition: background-position 0.5s ease;
+  background-position: 0% 50%;
+}
+
+.hover-gradient-shift:hover {
+  background-position: 100% 50%;
+}
+
+/* ============ UTILITY CLASSES ============ */
+
+.gradient-text-primary {
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-success {
+  background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-warning {
+  background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-error {
+  background: linear-gradient(135deg, #EF4444 0%, #F87171 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
