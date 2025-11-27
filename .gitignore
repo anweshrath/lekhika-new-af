@@ -13,8 +13,10 @@ temp/
 *.js.bak
 *.js.old.js
 # Archive directories to prevent context overload
+# (Now organized in _project-files/)
 archived_context/
 chat_exports/
+_project-files/
 
 # Large files that cause performance issues
 *.md.backup

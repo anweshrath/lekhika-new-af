@@ -23,6 +23,7 @@ const pm2Manager = require('../services/pm2Manager');
 const jobManager = require('../services/jobManager');
 const routingEngine = require('../services/routingEngine');
 const metricsCollector = require('../services/metricsCollector');
+const workerFactory = require('../services/WorkerFactory');
 
 // ============================================
 // WORKER MANAGEMENT ENDPOINTS
@@ -114,6 +115,292 @@ router.delete('/workers/:workerId', async (req, res) => {
     });
   } catch (error) {
     logger.error('[Orchestration API] DELETE /workers/:workerId failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ============================================
+// WORKER FACTORY ENDPOINTS (NEW)
+// ============================================
+
+/**
+ * POST /orchestration/workers/create
+ * Create new worker from config or template
+ * Body: { name, type, port, template, maxConcurrent, maxMemory, env }
+ */
+router.post('/workers/create', async (req, res) => {
+  try {
+    const config = req.body;
+    
+    if (!config || Object.keys(config).length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Worker configuration required'
+      });
+    }
+
+    const result = await workerFactory.createWorker(config);
+    
+    logger.info(`[Orchestration API] Worker created: ${result.worker.name}`);
+    
+    res.json(result);
+  } catch (error) {
+    logger.error('[Orchestration API] POST /workers/create failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /orchestration/workers/:workerId/clone
+ * Clone existing worker
+ * Body: { name, port, maxConcurrent, env } (all optional, defaults from source)
+ */
+router.post('/workers/:workerId/clone', async (req, res) => {
+  try {
+    const { workerId } = req.params;
+    const overrides = req.body || {};
+
+    const result = await workerFactory.cloneWorker(workerId, overrides);
+    
+    logger.info(`[Orchestration API] Worker cloned: ${workerId} → ${result.worker.name}`);
+    
+    res.json(result);
+  } catch (error) {
+    logger.error('[Orchestration API] POST /workers/:workerId/clone failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /orchestration/workers/create-from-template
+ * Create worker from template
+ * Body: { template: 'standard|lean|queue|gpu|export', overrides: {...} }
+ */
+router.post('/workers/create-from-template', async (req, res) => {
+  try {
+    const { template, overrides = {} } = req.body;
+    
+    if (!template) {
+      return res.status(400).json({
+        success: false,
+        error: 'Template ID required'
+      });
+    }
+
+    const result = await workerFactory.createFromTemplate(template, overrides);
+    
+    logger.info(`[Orchestration API] Worker created from template: ${template}`);
+    
+    res.json(result);
+  } catch (error) {
+    logger.error('[Orchestration API] POST /workers/create-from-template failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /orchestration/workers/batch-create
+ * Create multiple workers at once
+ * Body: { workers: [config1, config2, ...] }
+ */
+router.post('/workers/batch-create', async (req, res) => {
+  try {
+    const { workers } = req.body;
+    
+    if (!Array.isArray(workers) || workers.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Workers array required'
+      });
+    }
+
+    const result = await workerFactory.createBatch(workers);
+    
+    logger.info(`[Orchestration API] Batch created: ${result.created}/${workers.length} workers`);
+    
+    res.json(result);
+  } catch (error) {
+    logger.error('[Orchestration API] POST /workers/batch-create failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /orchestration/workers/:workerId/delete
+ * Delete worker completely (stop + remove from PM2 + remove from config)
+ */
+router.delete('/workers/:workerId/delete', async (req, res) => {
+  try {
+    const { workerId } = req.params;
+
+    const result = await workerFactory.deleteWorker(workerId);
+    
+    logger.info(`[Orchestration API] Worker deleted: ${workerId}`);
+    
+    res.json(result);
+  } catch (error) {
+    logger.error('[Orchestration API] DELETE /workers/:workerId/delete failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /orchestration/workers/templates
+ * Get all available worker templates
+ */
+router.get('/workers/templates', async (req, res) => {
+  try {
+    const templates = workerFactory.getTemplates();
+    
+    res.json({
+      success: true,
+      templates: templates,
+      count: templates.length
+    });
+  } catch (error) {
+    logger.error('[Orchestration API] GET /workers/templates failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /orchestration/workers/suggestions
+ * Get smart suggestions for worker creation/scaling
+ */
+router.get('/workers/suggestions', async (req, res) => {
+  try {
+    const suggestions = await workerFactory.getSuggestions();
+    
+    res.json({
+      success: true,
+      ...suggestions
+    });
+  } catch (error) {
+    logger.error('[Orchestration API] GET /workers/suggestions failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /orchestration/ports/available
+ * Get available ports for worker assignment
+ * Query params: limit (default 10)
+ */
+router.get('/ports/available', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    const ports = await workerFactory.getAvailablePorts(limit);
+    
+    res.json({
+      success: true,
+      ports: ports,
+      count: ports.length,
+      next: ports[0] || null
+    });
+  } catch (error) {
+    logger.error('[Orchestration API] GET /ports/available failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /orchestration/ports/check
+ * Check if specific port is available
+ * Body: { port: number }
+ */
+router.post('/ports/check', async (req, res) => {
+  try {
+    const { port } = req.body;
+    
+    if (!port || typeof port !== 'number') {
+      return res.status(400).json({
+        success: false,
+        error: 'Port number required'
+      });
+    }
+
+    const conflict = await workerFactory.checkPortConflict(port);
+    
+    res.json({
+      success: true,
+      port: port,
+      available: !conflict,
+      usedBy: conflict ? conflict.name : null
+    });
+  } catch (error) {
+    logger.error('[Orchestration API] POST /ports/check failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /orchestration/workers/preview
+ * Preview worker creation (dry run)
+ * Body: worker config
+ */
+router.post('/workers/preview', async (req, res) => {
+  try {
+    const config = req.body;
+    
+    const preview = await workerFactory.previewWorkerCreation(config);
+    
+    res.json({
+      success: true,
+      ...preview
+    });
+  } catch (error) {
+    logger.error('[Orchestration API] POST /workers/preview failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /orchestration/factory/status
+ * Get worker factory status and statistics
+ */
+router.get('/factory/status', async (req, res) => {
+  try {
+    const status = await workerFactory.getStatus();
+    
+    res.json({
+      success: true,
+      ...status
+    });
+  } catch (error) {
+    logger.error('[Orchestration API] GET /factory/status failed:', error);
     res.status(500).json({
       success: false,
       error: error.message

@@ -23,6 +23,8 @@ class RoutingEngine {
     this.strategy = 'least_loaded'; // Default strategy
     this.affinityRules = new Map(); // Job type → worker tags mapping
     this.roundRobinIndex = 0;
+    this.sessionCache = new Map(); // For sticky sessions
+    this.latencyTracker = new Map(); // Worker → latency history
     this.routingMetrics = {
       totalRouted: 0,
       byWorker: new Map(),
@@ -55,10 +57,21 @@ class RoutingEngine {
 
   /**
    * Set routing strategy
-   * @param {string} strategy - round_robin, least_loaded, weighted, health_based, affinity_based
+   * @param {string} strategy - Routing strategy name
    */
   setStrategy(strategy) {
-    const validStrategies = ['round_robin', 'least_loaded', 'weighted', 'health_based', 'affinity_based'];
+    const validStrategies = [
+      'round_robin',
+      'least_loaded',
+      'weighted',
+      'health_based',
+      'affinity_based',
+      'priority_based',
+      'latency_based',
+      'capacity_aware',
+      'sticky_session',
+      'resource_based'
+    ];
     
     if (!validStrategies.includes(strategy)) {
       throw new Error(`Invalid strategy: ${strategy}. Must be one of: ${validStrategies.join(', ')}`);
@@ -140,6 +153,21 @@ class RoutingEngine {
         break;
       case 'affinity_based':
         selectedWorker = this.leastLoaded(candidates); // Use least-loaded within affinity group
+        break;
+      case 'priority_based':
+        selectedWorker = this.priorityBased(candidates, job);
+        break;
+      case 'latency_based':
+        selectedWorker = this.latencyBased(candidates);
+        break;
+      case 'capacity_aware':
+        selectedWorker = this.capacityAware(candidates);
+        break;
+      case 'sticky_session':
+        selectedWorker = this.stickySession(candidates, job);
+        break;
+      case 'resource_based':
+        selectedWorker = this.resourceBased(candidates);
         break;
       default:
         selectedWorker = this.leastLoaded(candidates); // Default to least-loaded
@@ -295,13 +323,246 @@ class RoutingEngine {
   }
 
   /**
+   * Priority-Based: Route based on worker priority and job priority
+   */
+  priorityBased(workers, job) {
+    if (workers.length === 0) {
+      throw new Error('No workers available for priority-based routing');
+    }
+
+    const jobPriority = job.priority || 'normal';
+    
+    // If high-priority job, route to high-priority workers first
+    if (jobPriority === 'high') {
+      const highPriorityWorkers = workers.filter(w => w.tags?.includes('high-priority'));
+      if (highPriorityWorkers.length > 0) {
+        return this.leastLoaded(highPriorityWorkers);
+      }
+    }
+    
+    // Fallback to least-loaded
+    return this.leastLoaded(workers);
+  }
+
+  /**
+   * Latency-Based: Route to worker with lowest average response time
+   */
+  latencyBased(workers) {
+    if (workers.length === 0) {
+      throw new Error('No workers available for latency-based routing');
+    }
+
+    // Sort by latency (ascending) - prefer workers with lower latency
+    const sorted = workers.sort((a, b) => {
+      const aLatency = this.latencyTracker.get(a.id) || 1000; // Default 1000ms
+      const bLatency = this.latencyTracker.get(b.id) || 1000;
+      return aLatency - bLatency;
+    });
+
+    return sorted[0];
+  }
+
+  /**
+   * Capacity-Aware: Route based on remaining capacity percentage
+   */
+  capacityAware(workers) {
+    if (workers.length === 0) {
+      throw new Error('No workers available for capacity-aware routing');
+    }
+
+    // Calculate remaining capacity percentage
+    const sorted = workers.sort((a, b) => {
+      const aCapacity = a.capacity || 10;
+      const aActive = a.metrics?.activeJobs || 0;
+      const aRemaining = (aCapacity - aActive) / aCapacity;
+      
+      const bCapacity = b.capacity || 10;
+      const bActive = b.metrics?.activeJobs || 0;
+      const bRemaining = (bCapacity - bActive) / bCapacity;
+      
+      return bRemaining - aRemaining; // Descending (most capacity first)
+    });
+
+    return sorted[0];
+  }
+
+  /**
+   * Sticky Session: Route same user/job type to same worker
+   */
+  stickySession(workers, job) {
+    if (workers.length === 0) {
+      throw new Error('No workers available for sticky-session routing');
+    }
+
+    // Generate session key from userId + jobType
+    const sessionKey = `${job.userId || 'unknown'}-${job.type || 'workflow'}`;
+    
+    // Check if we have a cached worker for this session
+    const cachedWorkerId = this.sessionCache.get(sessionKey);
+    
+    if (cachedWorkerId) {
+      const cachedWorker = workers.find(w => w.id === cachedWorkerId);
+      if (cachedWorker) {
+        logger.debug(`[RoutingEngine] Sticky session: ${sessionKey} → ${cachedWorkerId}`);
+        return cachedWorker;
+      }
+    }
+    
+    // No cached worker or worker no longer available - select new one
+    const selectedWorker = this.leastLoaded(workers);
+    
+    // Cache for future requests
+    this.sessionCache.set(sessionKey, selectedWorker.id);
+    
+    // Auto-cleanup old sessions (keep last 1000)
+    if (this.sessionCache.size > 1000) {
+      const firstKey = this.sessionCache.keys().next().value;
+      this.sessionCache.delete(firstKey);
+    }
+    
+    return selectedWorker;
+  }
+
+  /**
+   * Resource-Based: Route based on CPU/Memory availability
+   */
+  resourceBased(workers) {
+    if (workers.length === 0) {
+      throw new Error('No workers available for resource-based routing');
+    }
+
+    // Calculate resource score (lower CPU + lower memory = better)
+    const sorted = workers.sort((a, b) => {
+      const aCpu = a.metrics?.cpu || 50;
+      const aMemory = a.metrics?.memoryPercent || 50;
+      const aScore = (100 - aCpu) + (100 - aMemory); // Higher is better
+      
+      const bCpu = b.metrics?.cpu || 50;
+      const bMemory = b.metrics?.memoryPercent || 50;
+      const bScore = (100 - bCpu) + (100 - bMemory);
+      
+      return bScore - aScore; // Descending (best resources first)
+    });
+
+    return sorted[0];
+  }
+
+  /**
+   * Track latency for latency-based routing
+   * @param {string} workerId - Worker ID
+   * @param {number} latencyMs - Latency in milliseconds
+   */
+  trackLatency(workerId, latencyMs) {
+    const history = this.latencyTracker.get(workerId) || [];
+    history.push(latencyMs);
+    
+    // Keep last 100 latency measurements
+    if (history.length > 100) {
+      history.shift();
+    }
+    
+    // Calculate average latency
+    const avgLatency = history.reduce((sum, val) => sum + val, 0) / history.length;
+    this.latencyTracker.set(workerId, avgLatency);
+  }
+
+  /**
+   * Get all available routing strategies
+   */
+  getAvailableStrategies() {
+    return [
+      {
+        id: 'round_robin',
+        name: 'Round Robin',
+        description: 'Distribute jobs evenly across all workers',
+        useCase: 'Balanced load distribution',
+        pros: ['Simple', 'Fair distribution'],
+        cons: ['Ignores worker load', 'No intelligence']
+      },
+      {
+        id: 'least_loaded',
+        name: 'Least Loaded',
+        description: 'Route to worker with fewest active jobs',
+        useCase: 'Dynamic load balancing',
+        pros: ['Prevents overload', 'Adapts to load'],
+        cons: ['Slight overhead checking jobs']
+      },
+      {
+        id: 'weighted',
+        name: 'Weighted Distribution',
+        description: 'Route based on worker capacity/weight',
+        useCase: 'Workers with different capacities',
+        pros: ['Respects worker capacity', 'Configurable weights'],
+        cons: ['Needs manual weight configuration']
+      },
+      {
+        id: 'health_based',
+        name: 'Health-Based',
+        description: 'Route to healthiest worker',
+        useCase: 'Maximize reliability',
+        pros: ['Avoids unhealthy workers', 'Reliability focus'],
+        cons: ['May ignore capacity']
+      },
+      {
+        id: 'affinity_based',
+        name: 'Affinity-Based',
+        description: 'Match job type to worker capabilities',
+        useCase: 'Specialized workers (GPU, Export)',
+        pros: ['Optimizes for job type', 'Efficient resource use'],
+        cons: ['Requires tag configuration']
+      },
+      {
+        id: 'priority_based',
+        name: 'Priority-Based',
+        description: 'High-priority jobs go to dedicated workers',
+        useCase: 'VIP/urgent job handling',
+        pros: ['Fast-track important jobs', 'SLA compliance'],
+        cons: ['May underutilize some workers']
+      },
+      {
+        id: 'latency_based',
+        name: 'Latency-Based',
+        description: 'Route to worker with fastest response time',
+        useCase: 'Performance-critical applications',
+        pros: ['Minimizes response time', 'User experience focus'],
+        cons: ['Requires latency tracking']
+      },
+      {
+        id: 'capacity_aware',
+        name: 'Capacity-Aware',
+        description: 'Route based on remaining capacity percentage',
+        useCase: 'Prevent worker saturation',
+        pros: ['Prevents overload', 'Smart distribution'],
+        cons: ['Slight complexity']
+      },
+      {
+        id: 'sticky_session',
+        name: 'Sticky Sessions',
+        description: 'Route same user/job type to same worker',
+        useCase: 'Stateful applications, cache efficiency',
+        pros: ['Cache efficiency', 'Consistency'],
+        cons: ['May cause imbalance']
+      },
+      {
+        id: 'resource_based',
+        name: 'Resource-Based',
+        description: 'Route based on CPU/Memory availability',
+        useCase: 'Resource-intensive workloads',
+        pros: ['Optimizes resource usage', 'Prevents crashes'],
+        cons: ['Requires metrics collection']
+      }
+    ];
+  }
+
+  /**
    * Get routing configuration
    */
   getConfig() {
     return {
       strategy: this.strategy,
       affinityRules: this.getAffinityRules(),
-      metrics: this.getMetrics()
+      metrics: this.getMetrics(),
+      availableStrategies: this.getAvailableStrategies()
     };
   }
 }

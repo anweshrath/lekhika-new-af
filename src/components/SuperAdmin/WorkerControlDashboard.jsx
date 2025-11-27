@@ -30,12 +30,25 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
-  Shield
+  Shield,
+  StopCircle,
+  LayoutGrid,
+  Monitor,
+  Sliders,
+  FileCode
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { getWorkerPreference, setWorkerPreference } from '../../utils/workerRouter'
+import { getWorkerUrl } from '../../utils/workerConfig'
+import WorkerGrid from './WorkerGrid'
+import RoutingStrategySelector from './RoutingStrategySelector'
+import RedisCommandPalette from './RedisCommandPalette'
+import WorkerIPConfig from './WorkerIPConfig'
 
 const WorkerControlDashboard = () => {
+  const [activeTab, setActiveTab] = useState('grid') // 'grid', 'monitoring', 'control', 'logs'
   const [workerStatus, setWorkerStatus] = useState({ status: 'loading', error: 'Loading...' })
+  const [leanWorkerStatus, setLeanWorkerStatus] = useState({ status: 'loading', error: 'Loading...' })
   const [logs, setLogs] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [autoRefresh, setAutoRefresh] = useState(true)
@@ -51,6 +64,14 @@ const WorkerControlDashboard = () => {
     message: null
   })
   const [queueExecutionId, setQueueExecutionId] = useState('')
+  const [selectedWorker, setSelectedWorker] = useState(getWorkerPreference())
+
+  // Handle worker preference change
+  const handleWorkerChange = (workerType) => {
+    setWorkerPreference(workerType)
+    setSelectedWorker(workerType)
+    toast.success(`Worker preference set to: ${workerType === 'lean' ? 'Lean (Optimized)' : 'Standard'}`)
+  }
 
   // Worker status colors
   const getStatusColor = (status) => {
@@ -71,25 +92,68 @@ const WorkerControlDashboard = () => {
     }
   }
 
-  // Fetch worker status
+  // Fetch standard worker status
   const fetchWorkerStatus = async () => {
     try {
-      const response = await fetch('http://157.254.24.49:3001/health')
+      // Add 5-second timeout to prevent long waits
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+      
+      const response = await fetch('http://103.190.93.28:3001/health', {
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId)
+      
       if (response.ok) {
         const data = await response.json()
         setWorkerStatus(data)
       } else {
-        setWorkerStatus({ status: 'error', error: 'Worker not responding' })
+        setWorkerStatus({ status: 'offline', error: 'Worker not responding' })
       }
     } catch (error) {
-      setWorkerStatus({ status: 'error', error: error.message })
+      setWorkerStatus({ status: 'offline', error: error.name === 'AbortError' ? 'Connection timeout' : error.message })
+    }
+  }
+
+  // Fetch lean worker status
+  const fetchLeanWorkerStatus = async () => {
+    try {
+      // Add 5-second timeout to prevent long waits
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+      
+      const response = await fetch('http://103.190.93.28:3002/health', {
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId)
+      
+      if (response.ok) {
+        const data = await response.json()
+        setLeanWorkerStatus(data)
+      } else {
+        setLeanWorkerStatus({ status: 'offline', error: 'Lean worker not responding' })
+      }
+    } catch (error) {
+      // Timeout or network error - lean worker probably not running
+      setLeanWorkerStatus({ status: 'offline', error: 'Not available' })
     }
   }
 
   // Fetch queue status (Redis queue)
   const fetchQueueStatus = async () => {
     try {
-      const response = await fetch('http://157.254.24.49:3001/queue/stats')
+      // Add 5-second timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+      
+      const response = await fetch('http://103.190.93.28:3001/queue/stats', {
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId)
+      
       if (!response.ok) {
         setQueueStatus(prev => ({
           ...prev,
@@ -111,7 +175,7 @@ const WorkerControlDashboard = () => {
       setQueueStatus(prev => ({
         ...prev,
         loading: false,
-        error: error.message
+        error: error.name === 'AbortError' ? 'Connection timeout' : error.message
       }))
     }
   }
@@ -128,7 +192,7 @@ const WorkerControlDashboard = () => {
       let lastError
       
       try {
-        response = await fetch('http://157.254.24.49:3001/logs?limit=50', {
+        response = await fetch('http://103.190.93.28:3001/logs?limit=50', {
           cache: 'no-cache',
           signal: controller.signal,
           mode: 'cors', // Explicitly request CORS
@@ -145,7 +209,7 @@ const WorkerControlDashboard = () => {
         if (fetchError.name !== 'AbortError') {
           await new Promise(resolve => setTimeout(resolve, 1000))
           try {
-            response = await fetch('http://157.254.24.49:3001/logs?limit=50', {
+            response = await fetch('http://103.190.93.28:3001/logs?limit=50', {
               cache: 'no-cache',
               signal: controller.signal,
               mode: 'cors',
@@ -263,7 +327,7 @@ const WorkerControlDashboard = () => {
   // Worker control functions
   const restartWorker = async () => {
     try {
-      const response = await fetch('http://157.254.24.49:3001/restart', { method: 'POST' })
+      const response = await fetch('http://103.190.93.28:3001/restart', { method: 'POST' })
       if (response.ok) {
         toast.success('Worker restart initiated')
         setTimeout(fetchWorkerStatus, 2000)
@@ -280,7 +344,7 @@ const WorkerControlDashboard = () => {
       return
     }
     try {
-      const response = await fetch('http://157.254.24.49:3001/stop-worker', { method: 'POST' })
+      const response = await fetch('http://103.190.93.28:3001/stop-worker', { method: 'POST' })
       if (response.ok) {
         toast.success('Worker stop initiated')
         setTimeout(fetchWorkerStatus, 2000)
@@ -299,7 +363,7 @@ const WorkerControlDashboard = () => {
 
   const startWorker = async () => {
     try {
-      const response = await fetch('http://157.254.24.49:3001/start-worker', { method: 'POST' })
+      const response = await fetch('http://103.190.93.28:3001/start-worker', { method: 'POST' })
       if (response.ok) {
         toast.success('Worker start initiated')
         setTimeout(fetchWorkerStatus, 2000)
@@ -321,7 +385,7 @@ const WorkerControlDashboard = () => {
 
   const cleanupExecutions = async () => {
     try {
-      const response = await fetch('http://157.254.24.49:3001/cleanup', { method: 'POST' })
+      const response = await fetch('http://103.190.93.28:3001/cleanup', { method: 'POST' })
       if (response.ok) {
         const result = await response.json()
         toast.success(`Cleanup completed: ${result.activeExecutions} executions cleared`)
@@ -336,7 +400,7 @@ const WorkerControlDashboard = () => {
 
   const stopExecution = async (executionId) => {
     try {
-      const response = await fetch(`http://157.254.24.49:3001/stop/${executionId}`, { method: 'POST' })
+      const response = await fetch(`http://103.190.93.28:3001/stop/${executionId}`, { method: 'POST' })
       if (response.ok) {
         toast.success(`Execution ${executionId} stopped`)
         fetchWorkerStatus()
@@ -357,7 +421,7 @@ const WorkerControlDashboard = () => {
     }
 
     try {
-      const response = await fetch(`http://157.254.24.49:3001/queue/retry/${trimmed}`, {
+      const response = await fetch(`http://103.190.93.28:3001/queue/retry/${trimmed}`, {
         method: 'POST'
       })
       if (response.ok) {
@@ -375,7 +439,7 @@ const WorkerControlDashboard = () => {
 
   const pauseQueue = async () => {
     try {
-      const response = await fetch('http://157.254.24.49:3001/queue/pause', { method: 'POST' })
+      const response = await fetch('http://103.190.93.28:3001/queue/pause', { method: 'POST' })
       if (response.ok) {
         toast.success('Queue paused')
         fetchQueueStatus()
@@ -390,7 +454,7 @@ const WorkerControlDashboard = () => {
 
   const resumeQueue = async () => {
     try {
-      const response = await fetch('http://157.254.24.49:3001/queue/resume', { method: 'POST' })
+      const response = await fetch('http://103.190.93.28:3001/queue/resume', { method: 'POST' })
       if (response.ok) {
         toast.success('Queue resumed')
         fetchQueueStatus()
@@ -406,7 +470,7 @@ const WorkerControlDashboard = () => {
   const clearFailedQueueJobs = async () => {
     if (!confirm('Clear ALL failed jobs from the queue? This cannot be undone.')) return
     try {
-      const response = await fetch('http://157.254.24.49:3001/queue/clear/failed', { method: 'POST' })
+      const response = await fetch('http://103.190.93.28:3001/queue/clear/failed', { method: 'POST' })
       if (response.ok) {
         const data = await response.json().catch(() => ({}))
         toast.success(data.message || 'Cleared failed queue jobs')
@@ -423,7 +487,7 @@ const WorkerControlDashboard = () => {
   const clearDelayedQueueJobs = async () => {
     if (!confirm('Clear ALL delayed jobs from the queue? This cannot be undone.')) return
     try {
-      const response = await fetch('http://157.254.24.49:3001/queue/clear/delayed', { method: 'POST' })
+      const response = await fetch('http://103.190.93.28:3001/queue/clear/delayed', { method: 'POST' })
       if (response.ok) {
         const data = await response.json().catch(() => ({}))
         toast.success(data.message || 'Cleared delayed queue jobs')
@@ -437,13 +501,49 @@ const WorkerControlDashboard = () => {
     }
   }
 
+  const clearWaitingQueueJobs = async () => {
+    if (!confirm('Clear ALL waiting jobs from the queue? This will drop jobs that have not started yet.')) return
+    try {
+      const response = await fetch('http://103.190.93.28:3001/queue/clear/waiting', { method: 'POST' })
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}))
+        toast.success(data.message || 'Cleared waiting queue jobs')
+        fetchQueueStatus()
+      } else {
+        const data = await response.json().catch(() => ({}))
+        toast.error(data.error || 'Failed to clear waiting jobs')
+      }
+    } catch (error) {
+      toast.error('Failed to clear waiting jobs: ' + error.message)
+    }
+  }
+
+  const hardResetQueue = async () => {
+    if (!confirm('⚠️ HARD RESET QUEUE?\n\nThis will clear ALL waiting, delayed and failed jobs.\nActive executions must be stopped separately.\n\nAre you absolutely sure?')) {
+      return
+    }
+    try {
+      const response = await fetch('http://103.190.93.28:3001/queue/reset', { method: 'POST' })
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}))
+        toast.success(data.message || 'Queue reset applied')
+        fetchQueueStatus()
+      } else {
+        const data = await response.json().catch(() => ({}))
+        toast.error(data.error || 'Failed to reset queue')
+      }
+    } catch (error) {
+      toast.error('Failed to reset queue: ' + error.message)
+    }
+  }
+
   // Auto-refresh
   useEffect(() => {
     let isMounted = true
     
     const initialFetch = async () => {
       try {
-        await Promise.all([fetchWorkerStatus(), fetchLogs(), fetchQueueStatus()])
+        await Promise.all([fetchWorkerStatus(), fetchLeanWorkerStatus(), fetchLogs(), fetchQueueStatus()])
       } catch (error) {
         console.error('Initial fetch failed:', error)
       } finally {
@@ -460,7 +560,7 @@ const WorkerControlDashboard = () => {
       interval = setInterval(async () => {
         if (isMounted) {
           try {
-            await Promise.all([fetchWorkerStatus(), fetchLogs(), fetchQueueStatus()])
+            await Promise.all([fetchWorkerStatus(), fetchLeanWorkerStatus(), fetchLogs(), fetchQueueStatus()])
           } catch (error) {
             console.error('Auto-refresh failed:', error)
           }
@@ -520,6 +620,16 @@ const WorkerControlDashboard = () => {
     )
   }
 
+  // Tab navigation data
+  const tabs = [
+    { id: 'grid', label: 'Worker Grid', icon: LayoutGrid, color: 'blue' },
+    { id: 'monitoring', label: 'Monitoring', icon: Monitor, color: 'purple' },
+    { id: 'routing', label: 'Routing', icon: Activity, color: 'cyan' },
+    { id: 'redis', label: 'Redis & Queue', icon: Terminal, color: 'teal' },
+    { id: 'control', label: 'Control Panel', icon: Sliders, color: 'green' },
+    { id: 'logs', label: 'Logs & Debug', icon: FileCode, color: 'orange' }
+  ]
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -533,9 +643,9 @@ const WorkerControlDashboard = () => {
             <div className="p-3 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-xl border border-blue-500/30 shadow-lg">
               <Server className="w-8 h-8 text-blue-400" />
             </div>
-            Worker Control Dashboard
+            Worker Orchestration Center
           </h1>
-          <p className="text-gray-400 text-lg mb-2">Monitor and control the Lekhika VPS Worker</p>
+          <p className="text-gray-400 text-lg mb-2">Complete worker management and control system</p>
           <p className="text-gray-500 text-sm">
             Last Updated: <span className="text-blue-400 font-mono font-semibold">{currentTime.toLocaleTimeString()}</span>
           </p>
@@ -561,6 +671,241 @@ const WorkerControlDashboard = () => {
             <RefreshCw className="w-4 h-4" />
             Refresh
           </motion.button>
+        </div>
+      </motion.div>
+
+      {/* Tab Navigation */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-gradient-to-r from-gray-800 to-gray-900 rounded-xl border border-gray-700 p-2 mb-6"
+      >
+        <div className="flex items-center gap-2">
+          {tabs.map((tab) => {
+            const Icon = tab.icon
+            const isActive = activeTab === tab.id
+            
+            return (
+              <motion.button
+                key={tab.id}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setActiveTab(tab.id)}
+                className={`
+                  flex-1 px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2
+                  ${isActive
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/50 border border-blue-500/50'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                  }
+                `}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </motion.button>
+            )
+          })}
+        </div>
+      </motion.div>
+
+      {/* Tab Content */}
+      <AnimatePresence mode="wait">
+        {activeTab === 'grid' && (
+          <motion.div
+            key="grid"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.2 }}
+          >
+            <WorkerGrid />
+          </motion.div>
+        )}
+
+        {activeTab === 'monitoring' && (
+          <motion.div
+            key="monitoring"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.2 }}
+          >
+          {/* WORKER COMPARISON: Standard vs Lean */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-2xl border border-purple-500/30 shadow-2xl p-8 mb-6"
+          >
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+            <BarChart3 className="w-7 h-7 text-purple-400" />
+            Worker Comparison: Standard vs Lean
+          </h2>
+          <div className="text-sm text-gray-400">Memory Optimization Test</div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Standard Worker */}
+          <div className="bg-gray-800/50 rounded-xl border border-gray-700 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Server className="w-5 h-5 text-blue-400" />
+                <h3 className="text-lg font-bold text-white">Standard Worker</h3>
+              </div>
+              <span className="px-3 py-1 bg-blue-500/20 text-blue-300 text-xs font-semibold rounded-full">
+                Port 3001
+              </span>
+            </div>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Status:</span>
+                <span className={`font-medium ${getStatusColor(workerStatus.status)}`}>
+                  {workerStatus?.status || 'Loading...'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Memory (Heap):</span>
+                <span className="text-white font-mono font-bold">
+                  {workerStatus?.memory?.heapUsed ? formatBytes(workerStatus.memory.heapUsed) : 'N/A'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Active Jobs:</span>
+                <span className="text-white font-bold">
+                  {workerStatus?.activeExecutions || 0}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Capacity:</span>
+                <span className="text-white">
+                  {workerStatus?.capacity || 'N/A'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Lean Worker */}
+          <div className="bg-gray-800/50 rounded-xl border border-green-500/50 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-green-400" />
+                <h3 className="text-lg font-bold text-white">Lean Worker</h3>
+              </div>
+              <span className="px-3 py-1 bg-green-500/20 text-green-300 text-xs font-semibold rounded-full">
+                Port 3002 • Optimized
+              </span>
+            </div>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Status:</span>
+                <span className={`font-medium ${getStatusColor(leanWorkerStatus.status)}`}>
+                  {leanWorkerStatus?.status || 'Loading...'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Memory (Heap):</span>
+                <span className="text-green-400 font-mono font-bold">
+                  {leanWorkerStatus?.memory?.heapUsed ? formatBytes(leanWorkerStatus.memory.heapUsed) : 'N/A'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Active Jobs:</span>
+                <span className="text-white font-bold">
+                  {leanWorkerStatus?.activeExecutions || 0}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Capacity:</span>
+                <span className="text-white">
+                  {leanWorkerStatus?.capacity || 'N/A'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Memory Savings Calculation */}
+        {workerStatus?.memory?.heapUsed && leanWorkerStatus?.memory?.heapUsed && (
+          <div className="mt-6 bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <TrendingDown className="w-5 h-5 text-green-400" />
+                <span className="text-white font-semibold">Memory Savings</span>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-green-400">
+                  {Math.round(((workerStatus.memory.heapUsed - leanWorkerStatus.memory.heapUsed) / workerStatus.memory.heapUsed) * 100)}%
+                </div>
+                <div className="text-xs text-gray-400">
+                  {formatBytes(workerStatus.memory.heapUsed - leanWorkerStatus.memory.heapUsed)} saved
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Worker Selection Toggle */}
+        <div className="mt-6 bg-gray-800/50 rounded-xl border border-yellow-500/30 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Settings className="w-5 h-5 text-yellow-400" />
+              <h3 className="text-lg font-bold text-white">Active Worker Selection</h3>
+            </div>
+            <span className="text-xs text-gray-400">Routes new executions to selected worker</span>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <button
+              onClick={() => handleWorkerChange('standard')}
+              className={`p-4 rounded-xl border-2 transition-all duration-300 ${
+                selectedWorker === 'standard'
+                  ? 'border-blue-500 bg-blue-500/20 shadow-lg shadow-blue-500/20'
+                  : 'border-gray-600 bg-gray-700/30 hover:border-gray-500'
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <Server className={`w-5 h-5 ${selectedWorker === 'standard' ? 'text-blue-400' : 'text-gray-400'}`} />
+                <span className={`font-bold ${selectedWorker === 'standard' ? 'text-blue-300' : 'text-gray-300'}`}>
+                  Standard Worker
+                </span>
+              </div>
+              <div className="text-xs text-gray-400 mb-2">Port 3001 • Full features</div>
+              {selectedWorker === 'standard' && (
+                <div className="flex items-center gap-2 text-xs text-blue-300">
+                  <CheckCircle className="w-3 h-3" />
+                  Active
+                </div>
+              )}
+            </button>
+
+            <button
+              onClick={() => handleWorkerChange('lean')}
+              className={`p-4 rounded-xl border-2 transition-all duration-300 ${
+                selectedWorker === 'lean'
+                  ? 'border-green-500 bg-green-500/20 shadow-lg shadow-green-500/20'
+                  : 'border-gray-600 bg-gray-700/30 hover:border-gray-500'
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <Zap className={`w-5 h-5 ${selectedWorker === 'lean' ? 'text-green-400' : 'text-gray-400'}`} />
+                <span className={`font-bold ${selectedWorker === 'lean' ? 'text-green-300' : 'text-gray-300'}`}>
+                  Lean Worker
+                </span>
+              </div>
+              <div className="text-xs text-gray-400 mb-2">Port 3002 • 70% less memory</div>
+              {selectedWorker === 'lean' && (
+                <div className="flex items-center gap-2 text-xs text-green-300">
+                  <CheckCircle className="w-3 h-3" />
+                  Active
+                </div>
+              )}
+            </button>
+          </div>
+
+          <div className="mt-4 text-xs text-gray-400 bg-gray-900/50 rounded-lg p-3">
+            <Info className="w-4 h-4 inline mr-2 text-blue-400" />
+            New executions will route to <span className="font-bold text-white">{selectedWorker === 'lean' ? 'Lean Worker (Port 3002)' : 'Standard Worker (Port 3001)'}</span>. 
+            Change takes effect immediately.
+          </div>
         </div>
       </motion.div>
 
@@ -778,14 +1123,51 @@ const WorkerControlDashboard = () => {
           </div>
         )}
       </motion.div>
+          </motion.div>
+        )}
 
-      {/* Control Panel */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl border border-gray-700 shadow-xl p-6"
-      >
+        {activeTab === 'routing' && (
+          <motion.div
+            key="routing"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.2 }}
+          >
+            <RoutingStrategySelector />
+          </motion.div>
+        )}
+
+          {activeTab === 'redis' && (
+          <motion.div
+            key="redis"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.2 }}
+          >
+            <RedisCommandPalette />
+          </motion.div>
+        )}
+
+        {activeTab === 'control' && (
+          <motion.div
+            key="control"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.2 }}
+          >
+          {/* Worker IP Configuration */}
+          <WorkerIPConfig />
+
+          {/* Control Panel */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl border border-gray-700 shadow-xl p-6"
+          >
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-500/20 rounded-lg">
@@ -912,7 +1294,7 @@ const WorkerControlDashboard = () => {
               <div>
                 <h3 className="text-sm font-semibold text-white">Queue Controls (SuperAdmin)</h3>
                 <p className="text-xs text-gray-400">
-                  Retry a specific execution in the Redis queue by executionId.
+                  Inspect and control Redis-backed job queue for workflow executions.
                 </p>
               </div>
             </div>
@@ -974,6 +1356,24 @@ const WorkerControlDashboard = () => {
               <Clock className="w-3 h-3 text-orange-300" />
               Clear Delayed
             </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={clearWaitingQueueJobs}
+              className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-xs text-white rounded-lg border border-sky-500/50 flex items-center gap-2"
+            >
+              <Zap className="w-3 h-3 text-sky-300" />
+              Clear Waiting
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={hardResetQueue}
+              className="px-3 py-2 bg-gradient-to-r from-red-700 to-red-800 hover:from-red-600 hover:to-red-700 text-xs text-white rounded-lg border border-red-500/70 flex items-center gap-2 shadow-lg shadow-red-500/40"
+            >
+              <AlertTriangle className="w-3 h-3 text-red-200" />
+              Reset Queue (Nuke)
+            </motion.button>
           </div>
 
           {!queueStatus.enabled && (
@@ -983,6 +1383,52 @@ const WorkerControlDashboard = () => {
             </p>
           )}
         </div>
+      </motion.div>
+
+      {/* Active Executions List */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.42 }}
+        className="bg-gray-800 rounded-xl border border-gray-700 shadow-xl p-6"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-500/20 rounded-lg">
+              <Activity className="w-5 h-5 text-green-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-white">Active Executions (Live)</h3>
+              <p className="text-xs text-gray-400">
+                These are executions the worker thinks are currently running. You can stop them individually.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {Array.isArray(workerStatus?.activeExecutionIds) && workerStatus.activeExecutionIds.length > 0 ? (
+          <div className="space-y-2">
+            {workerStatus.activeExecutionIds.map((id) => (
+              <div
+                key={id}
+                className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-900/60 border border-gray-700/70"
+              >
+                <span className="font-mono text-xs text-gray-200 truncate">{id}</span>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => stopExecution(id)}
+                  className="px-3 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded-lg flex items-center gap-1"
+                >
+                  <StopCircle className="w-3 h-3" />
+                  Stop
+                </motion.button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-500">No active executions tracked by the worker.</p>
+        )}
       </motion.div>
 
       {/* Emergency Terminal Commands - Collapsible Accordion */}
@@ -1038,7 +1484,7 @@ const WorkerControlDashboard = () => {
                     </div>
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText('ssh lekhi7866@157.254.24.49')
+                        navigator.clipboard.writeText('ssh lekhi7866@103.190.93.28')
                         toast.success('SSH command copied to clipboard!', { icon: '📋' })
                       }}
                       className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs text-white flex items-center gap-2 transition-all hover:scale-105"
@@ -1048,7 +1494,7 @@ const WorkerControlDashboard = () => {
                     </button>
                   </div>
                   <div className="bg-black/60 rounded-lg p-3 font-mono text-sm text-green-400 border border-green-500/20">
-                    <code className="break-all">ssh lekhi7866@157.254.24.49</code>
+                    <code className="break-all">ssh lekhi7866@103.190.93.28</code>
                   </div>
                 </div>
 
@@ -1217,14 +1663,24 @@ const WorkerControlDashboard = () => {
           )}
         </AnimatePresence>
       </motion.div>
+          </motion.div>
+        )}
 
-      {/* Live Logs */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="bg-gray-800 rounded-xl border border-gray-700 p-6"
-      >
+        {activeTab === 'logs' && (
+          <motion.div
+            key="logs"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.2 }}
+          >
+          {/* Live Logs */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="bg-gray-800 rounded-xl border border-gray-700 p-6"
+          >
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-white flex items-center gap-3">
             <Terminal className="w-6 h-6 text-green-400" />
@@ -1300,6 +1756,10 @@ const WorkerControlDashboard = () => {
           )}
         </div>
       </motion.div>
+          </motion.div>
+        )}
+
+      </AnimatePresence>
     </div>
   )
 }
